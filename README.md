@@ -1,7 +1,9 @@
 This is a work in progress project.  For now this only features using QTableView/QAbstractTableModel and QStyleItemDelegate to simulate checkboxes.
 
 I am not using QCheckBox(), but rather painting the image and manually handling the mouseclicks within the Delegate.  Doing it this way is FARRRR more
-performant than adding QCheckBox() widgets in the Delegate.
+performant than adding QCheckBox() widgets in the Delegate and can easily handle hundreds of thousands of rows.
+
+(getting the data to even populate the table takes longer)
 
 Features that I will be adding (once i figure it out):
 
