@@ -8,12 +8,13 @@ Because of this implementation with custom views/models/delegates it will remain
 Features that this currently has as of 1/14/2024:
 
 1) Sorting
-2) Filtering w/ Comboboxes at the headers
-3) Expansion of rows that contain a sub-table widget for additional information
-4) Checkboxes in columns
-5) Setting which columns you want to be editable
-6) Being able to edit cell data
-7) Filter combobox options update as cell data is changed
+2) Column Sections are movable
+3) Filtering w/ Comboboxes at the headers
+4) Expansion of rows that contain a sub-table widget for additional information
+5) Checkboxes in columns
+6) Setting which columns you want to be editable
+7) Being able to edit cell data
+8) Filter combobox options update as cell data is changed
 
 Features left to finish:
 
