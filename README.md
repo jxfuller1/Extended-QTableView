@@ -24,6 +24,7 @@ Features left to finish:
 5) Adding/Changing some visual aspects
 6) Add Footer Row
 
+![table](https://github.com/jxfuller1/QTableView-with-Checkboxes/assets/123666150/fd7c4bec-748d-4785-81ac-475bd6842013)
 
 Uploading this for now.  I honestly could find no examples of anyone else using this method of painting the image and manually handling the click states of the Checkbox in python... 
 and it's my first time working with Views/Models, so uploading this for anyone else that may need this for now as I work on other features.
