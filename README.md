@@ -10,11 +10,11 @@ Features that this currently has as of 1/14/2024:
 1) Sorting
 2) Column Sections are movable
 3) Filtering w/ Comboboxes at the headers
-4) Expansion of rows that contain a sub-table widget for additional information
+4) Expansion of rows that to display sub-tablewidgets to give additional information for each row
 5) Checkboxes in columns
 6) Setting which columns you want to be editable
 7) Being able to edit cell data
-8) Filter combobox options update as cell data is changed
+8) Filter combobox options update dynamically as cell data is changed
 
 Features left to finish:
 
@@ -24,6 +24,7 @@ Features left to finish:
 4) Being able to add new rows
 5) Adding/Changing some visual aspects
 6) Add Footer Row
+7) Add widget that shows current filters applied below footer row that hides/shows
 
 ![table](https://github.com/jxfuller1/QTableView-with-Checkboxes/assets/123666150/fd7c4bec-748d-4785-81ac-475bd6842013)
 
