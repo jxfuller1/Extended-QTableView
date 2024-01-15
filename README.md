@@ -1,5 +1,8 @@
 This is a work in progress project.  
 
+This is based on a table UI element from an expensive piece of software from my work that is extremely
+handy for a manufacturing environment for tracking work/showing data.  I thought I'd recreate it.
+
 This QTableView uses a custom QHeaderView, QAbstractTableModel, QStyledItemDelegate QSortFilterProxyModel and more.  It has features that 
 simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
