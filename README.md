@@ -25,6 +25,7 @@ Features left to finish:
 5) Adding/Changing some visual aspects
 6) Add Footer Row
 7) Add widget that shows current filters applied below footer row that hides/shows
+8) Add support for setting a column as date datatype with having, on hover, button pop-up for calendar and choosing date
 
 ![table](https://github.com/jxfuller1/QTableView-with-Checkboxes/assets/123666150/fd7c4bec-748d-4785-81ac-475bd6842013)
 
