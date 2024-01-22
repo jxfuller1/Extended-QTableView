@@ -30,8 +30,10 @@ Features left to finish:
 7) Add widget that shows current filters applied below footer row that hides/shows
 8) Add support for setting a column as date datatype with having, on hover, button pop-up for calendar and choosing date
 
+![1](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/bcf1022e-7328-452f-9bd5-bb75ba64a500)
 
-![table](https://github.com/jxfuller1/QTableView-with-Checkboxes/assets/123666150/fd7c4bec-748d-4785-81ac-475bd6842013)
+![2](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/e3418c54-464c-4091-98fb-47a3db3651b2)
+
 
 Uploading this for now.  I honestly could find no examples of anyone else using this method of painting the image and manually handling the click states of the Checkbox in python... 
 and it's my first time working with Views/Models, so uploading this for anyone else that may need this for now as I work on other features.
