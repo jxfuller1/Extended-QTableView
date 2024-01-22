@@ -5,11 +5,12 @@ import bisect
 import random   #this is for testing purposes
 from typing import List, Union, Tuple, Dict
 
-from PyQt5.QtGui import QColor, QPen, QFont, QStandardItemModel, QWheelEvent, QMouseEvent, QKeyEvent
+from PyQt5.QtGui import QColor, QPen, QFont, QStandardItemModel, QWheelEvent, QMouseEvent, QKeyEvent, QPalette, \
+    QStandardItem
 from PyQt5.QtWidgets import QApplication, QTableView, QVBoxLayout, QMainWindow, QAbstractItemView, \
     QAbstractItemDelegate, QStyledItemDelegate, QPushButton, QWidget, QItemDelegate, QStyleOptionButton, QStyle, \
     QTableWidget, QHeaderView, QLabel, QLineEdit, QDialogButtonBox, QDialog, QTableWidgetItem, QComboBox, QFrame, \
-    QCheckBox, QStyleOptionViewItem
+    QCheckBox, QStyleOptionViewItem, QScrollBar, QHBoxLayout, QSizePolicy, QSpacerItem
 from PyQt5.QtCore import Qt, QAbstractTableModel, QEvent, QVariant, QSize, QRect, QModelIndex, pyqtSignal, \
     QSortFilterProxyModel, QPoint, pyqtSlot, QCoreApplication, QTimer, QLocale, QItemSelectionModel
 
@@ -18,8 +19,8 @@ from PyQt5.QtCore import Qt, QAbstractTableModel, QEvent, QVariant, QSize, QRect
 def random_indexes_for_testing(total_rows: int) -> List:
     random_indexes = []
 
-    for i in range(total_rows):
-        a = random.randint(0, total_rows)
+    for i in range(total_rows-1):
+        a = random.randint(0, total_rows-1)
         if a not in random_indexes:
             random_indexes.append(a)
 
@@ -31,15 +32,14 @@ class LineEdit(QLineEdit):
         super().__init__(parent)
 
     def focusInEvent(self, event):
-        self.setCursorPosition(0)
         super().focusInEvent(event)
 
 # delegate for entire qtableview
 class ButtonDelegate(QStyledItemDelegate):
     onexpansionChange = pyqtSignal(int, bool)
-    oncheckboxstateChange = pyqtSignal()
+    oncheckboxstateChange = pyqtSignal(int)
     # this signal is for updating the vertical header when editor is opened on cell for the arrow
-    oneditorStarted = pyqtSignal(object)
+    oneditorStarted = pyqtSignal(object, object)
 
     # passing keypresses from line edit to tableview to support in-column searching
     keyPressed = pyqtSignal(QLineEdit, QKeyEvent)
@@ -54,6 +54,8 @@ class ButtonDelegate(QStyledItemDelegate):
         self.editable_columns = editable_columns
         self.expanded_rows = []
 
+    #    self.new_highlighted_index = QModelIndex()
+
     def eventFilter(self, obj, event):
         if isinstance(obj, QLineEdit) and event.type() == QKeyEvent.KeyPress:
             # Emit the signal when a key is pressed in the QLineEdit
@@ -66,7 +68,6 @@ class ButtonDelegate(QStyledItemDelegate):
         index = index.model().mapToSource(index)
 
         if index.column() in self.checked_indexed_columns:
-
             button = QStyleOptionButton()
 
             # i don't know why but height needs to always be an odd number (or always even) for the y position
@@ -83,8 +84,12 @@ class ButtonDelegate(QStyledItemDelegate):
             new_rect = QRect(new_x, new_y, option.rect.width(), option.rect.height())
             button.rect = new_rect
 
-         #  button.text = "Click me"
-            button.state |= QStyle.State_Enabled
+            if index == self.highlighted_index:
+                button.state |= QStyle.State_MouseOver
+            else:
+                button.state |= QStyle.State_Enabled
+
+       #     button.state |= QStyle.State_Enabled
 
             if index.row() in self.checked_indexes_rows.get(index.column()):
                 button.state |= QStyle.State_On
@@ -123,12 +128,11 @@ class ButtonDelegate(QStyledItemDelegate):
             painter.setPen(border_color)
             painter.drawText(text_rect, Qt.AlignCenter, text)
 
+        self.highlighted_index = QModelIndex()
+
     def editorEvent(self, event, model, option, index):
         # map clicked row to source model index (needs to be done if user sorts/filters)
         index = index.model().mapToSource(index)
-
-      #  view=option.widget
-      #  view.edit(index)
 
         if index.column() in self.checked_indexed_columns or index.column() == 0:
             button_rect = option.rect
@@ -144,8 +148,26 @@ class ButtonDelegate(QStyledItemDelegate):
                     self.change_button_state(index.row(), index.column())
                 return True
 
+            elif event.type() == event.MouseMove:
+                # create a bounding box slightly smaller than the cell itsel.  When mouse movements are detected, if within
+                # the boudning box this will change mouse over state in paint().  If mouse within cell but outside this smaller
+                # bounding box in the cell, it will remove mouse over state in paint()
+                new_rect = QRect(option.rect.x()+6, option.rect.y()+4,  option.rect.width()-12, option.rect.height()-8)
+                if new_rect.contains(event.pos()):
+                # Update the highlighted index when the mouse is over the checkbox
+                    if self.highlighted_index != index:
+                        self.highlighted_index = index
+                        return True  # Ensure the view gets updated
+                else:
+                    # Reset the highlighted index when the mouse moves out of the cell
+                    self.highlighted_index = QModelIndex()
+                    return True
+
             else:
                 return True
+
+        if event.type() == event.MouseButtonPress:
+            self.parent().search_text = ""
 
         return super(ButtonDelegate, self).editorEvent(event, model, option, index)
 
@@ -167,11 +189,11 @@ class ButtonDelegate(QStyledItemDelegate):
                 if row in self.checked_indexes_rows.get(column):
                     self.checked_indexes_rows[column].remove(row)
 
-                    # emit to update proxy filter that checkbox states changed
-                    self.oncheckboxstateChange.emit()
+                    # emit to update proxy filter that checkbox states changed and update footer number
+                    self.oncheckboxstateChange.emit(column)
                 else:
                     self.checked_indexes_rows[column].append(row)
-                    self.oncheckboxstateChange.emit()
+                    self.oncheckboxstateChange.emit(column)
 
                 self.last_press_index = QModelIndex()
                 self.last_release_index = QModelIndex()
@@ -193,14 +215,14 @@ class ButtonDelegate(QStyledItemDelegate):
         if index.column() not in self.checked_indexed_columns and index.column() != 0 and index.column() not in self.editable_columns:
             editor = LineEdit(parent)
             editor.setReadOnly(True)
-            self.oneditorStarted.emit(index)
+            self.oneditorStarted.emit(index, editor)
             editor.installEventFilter(self)
             return editor
 
         elif index.column() in self.editable_columns:
             editor = LineEdit(parent)
             editor.setReadOnly(False)
-            self.oneditorStarted.emit(index)
+            self.oneditorStarted.emit(index, editor)
             editor.installEventFilter(self)
             return editor
 
@@ -331,44 +353,25 @@ class LazyDataModel(QAbstractTableModel):
         return super().flags(index) | Qt.ItemIsEditable  # add editable flag.
 
     def setData(self, index, value, role):
-      # if role == Qt.EditRole and not self.search_text:
         if role == Qt.EditRole:
 
             # -1 on the column to account for the expansion column, set new value if value changed in cell
-            self.table_data[index.row()][index.column()-1] = value
-            self.dataChanged.emit(index, index)
+            get_value = self.table_data[index.row()][index.column()-1]
 
-            return True
-
-        """
-        elif role == Qt.EditRole and self.search_text:
-            current_row, current_col = index.row(), index.column()
-            for row in range(self.rowCount()):
-                if row != current_row and self.table_data[row][index.column()-1][:len(self.search_text)].upper() == self.search_text.upper():
-
-                    print(self.table_data[row][index.column()-1][:len(self.search_text)].upper())
-                    target_index = self.index(row, current_col)
-                    self.dataChanged.emit(target_index, target_index)
-                 return True
-        """
+            if value != get_value:
+                self.table_data[index.row()][index.column()-1] = value
+                self.dataChanged.emit(index, index)
+                return True
+            return False
         return False
 
-    """
-    def change_current_index(self, index, value, role):
-        current_row, current_col = index.row(), index.column()
-        for row in range(self.rowCount()):
-            if row != current_row and self.table_data[row][index.column()-1][:len(self.search_text)].upper() == self.search_text.upper():
-                print(self.search_text.upper())
-                print(self.table_data[row][index.column()-1][:len(self.search_text)].upper())
-
-                target_index = self.index(row, current_col)
-                self.dataChanged.emit(target_index, target_index)
-    """
 
 class CustomTableView(QTableView):
     def __init__(self, model, columns_with_checkboxes: List[int], checked_indexes_rows: Dict[int, List[int]],
-                 sub_table_data: List[List[str]], editable_columns: List[int], parent=None):
+                 sub_table_data: List[List[str]], editable_columns: List[int] = None, parent=None, footer: bool = False,
+                 footer_values: dict = None):
         super().__init__(parent)
+        # parent being a qframe
         parent.resizeSignal.connect(self.handle_parent_resize)
 
         # move 1,1 position within qframe parent so that frame and widget dont' overlap
@@ -378,6 +381,15 @@ class CustomTableView(QTableView):
         self.filter_dict = {}
         self.filter_checked_rows = {}
         self.editable_columns = editable_columns
+        self.set_current_editor = None
+
+        self.footer_show = footer
+        self.footer_row_boxes = []
+        self.footer_values = footer_values
+
+        self.viewport_bottom_margin = 0
+        if self.footer_show:
+            self.viewport_bottom_margin = 25
 
         self.search_text = ""
 
@@ -403,8 +415,8 @@ class CustomTableView(QTableView):
         self.setMouseTracking(True)
         self.clicked.connect(self.on_cell_clicked)
 
-    #    self.selection_model = self.selectionModel()
-     #   self.selection_model.currentChanged.connect(self.handleCurrentChanged)
+        self.selection_model = self.selectionModel()
+        self.selection_model.currentChanged.connect(self.handleCurrentChanged)
 
         self.verticalScrollBar().valueChanged.connect(self.update_sub_table_positions_timer)
         self.verticalScrollBar().rangeChanged.connect(self.update_sub_table_positions_timer)
@@ -416,15 +428,116 @@ class CustomTableView(QTableView):
         # Apply styles directly to QTableView
         # Apply style to hide the frame
         self.setObjectName("tableview")
-        self.setStyleSheet(
-            "QTableView#tableview {"
-            "   border: none;"
-            "}"
-        )
+        self.setStyleSheet("QTableView#tableview {border: none;}")
 
+        # viewport margin for footer if user selectes one
+        self.setViewportMargins(self.verticalHeader().size().width(), self.horizontalHeader().size().height(), 0, self.viewport_bottom_margin)
+
+        if self.footer_show:
+            self.footer()
+
+    def footer(self):
+        self.footer_widget = QWidget(self)
+        stylesheet = "background-color: lightgrey;"
+        self.footer_widget.setStyleSheet(stylesheet)
+
+        # create footer lineedits
+        self.footer_row_items()
+        self.footer_item_update_positions()
+
+        for i in self.footer_values:
+            self.setFooterValue(i)
+
+        self.footer_position()
+        self.footer_widget.show()
+
+    # for adding row data numbers if float value
+    def try_float(self, s):
+        integer = s.isdigit()
+        if not integer:
+            try:
+                return float(s)
+            except ValueError:
+                pass
+
+    def setFooterValue(self, column: int):
+        footer_edit = self.footer_row_boxes[column]
+
+        if column in self.footer_values.keys() and column not in self.columns_with_checkboxes:
+            value = self.footer_values[column]
+            if "total" in value.lower():
+                footer_edit.setText(str(self.proxy_model.rowCount()))
+
+            if "sum" in value.lower():
+                # Get column data for visible rows
+
+                visible_rows = [self.indexFromProxytoSource(row, column).row() for row in range(self.proxy_model.rowCount())]
+                column_data = [self.model.data(self.model.index(row, column)) for row in visible_rows]
+
+                # add up any integer or float values to get total for footer
+                integer_total = sum(int(s) for s in column_data if s.isdigit())
+                all_floats = sum(value for s in column_data if (value := self.try_float(s)) is not None)
+                total = integer_total + all_floats
+
+                footer_edit.setText(str(total))
+
+        # total checked boxes, taking into account any removed via filters
+        elif column in self.columns_with_checkboxes:
+            delegate = self.itemDelegate()
+            checked_rows = delegate.checked_indexes_rows[column]
+
+            visible_rows = [self.indexFromProxytoSource(row, column).row() for row in range(self.proxy_model.rowCount())]
+            non_visible_checked_rows = set(checked_rows) - set(visible_rows)
+
+            total = set(checked_rows) - non_visible_checked_rows
+
+            footer_edit.setText(str(len(total)))
+
+    def footer_row_items(self):
+        for i in range(self.proxy_model.columnCount()):
+            line = QLineEdit(self.footer_widget)
+            line.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+            style_sheet = "QLineEdit {font-weight: bold; font-size: 9px;}"
+            line.setStyleSheet(style_sheet)
+            line.setReadOnly(True)
+            self.footer_row_boxes.append(line)
+
+            if i not in self.footer_values.keys():
+                line.hide()
+
+    def footer_item_update_positions(self):
+        if self.footer_show:
+            padding = 2
+            x = self.verticalHeader().width()
+
+            # get logical indexes of the headers to put footer row widgets in correct spot
+            logical_indices = [self.header.logicalIndex(i) for i in range(self.header.count())]
+
+            for i in range(self.proxy_model.columnCount()):
+                edit_box = self.footer_row_boxes[logical_indices[i]]
+                proxy_width = self.columnWidth(logical_indices[i])
+
+                edit_box.setGeometry(x+padding, padding, proxy_width-padding-padding, self.viewport_bottom_margin-padding-padding)
+                x += proxy_width
+
+    def footer_position(self):
+        # take into account vertical header width, as i want footer to overlay on top of vertical header
+        vertical_header_width = self.verticalHeader().width()
+
+        view_size = self.viewport().size()
+        view_position = self.viewport().mapToParent(QPoint(0, 0))
+
+        combined_column_width = sum(self.columnWidth(col) for col in range(self.proxy_model.columnCount()))
+        footer_width = min(combined_column_width, view_size.width())
+
+        self.footer_widget.setFixedWidth(footer_width+vertical_header_width)
+        self.footer_widget.setFixedHeight(self.viewport_bottom_margin)
+        self.footer_widget.move(view_position.x()-vertical_header_width, view_position.y()+view_size.height())
+
+    # for resetting the in-column searching, should only reset when column changes
     def handleCurrentChanged(self, current, previous):
-        # Emit your custom signal when the current cell changes
-        self.currentCellChanged.emit(current.row(), current.column())
+        if current.column() != previous.column():
+            self.search_text = ""
 
     # to support in-column searching in qtableview
     def handleLineEditKeyPress(self, line_edit, event):
@@ -435,16 +548,17 @@ class CustomTableView(QTableView):
         if event.text() and model_index.column() not in self.editable_columns:
             if event.key() == Qt.Key_Backspace:
                 self.search_text = self.search_text[:-1]
+                line_edit.setSelection(0, len(self.search_text))
             else:
-                self.search_text += event.text()
-            self.find_search_result(current_index)
+                self.find_search_result(current_index, line_edit, event.text())
 
     # find row for searches
-    def find_search_result(self, view_index: QModelIndex):
+    def find_search_result(self, view_index: QModelIndex, line_edit: QLineEdit, key_value: str):
         index = self.indexFromProxytoSource(view_index.row(), view_index.column())
         column = index.column()
 
         proxy_index_rows_found = []
+        temp_search_value = self.search_text + key_value
 
         # iterate through model data to find matches
         for row in range(self.model.rowCount()):
@@ -452,7 +566,7 @@ class CustomTableView(QTableView):
             data = self.model.data(model_index, Qt.DisplayRole)
 
             # check for any matches from abstract model to search string
-            if self.search_text.upper() == data[:len(self.search_text)].upper():
+            if temp_search_value.upper() == data[:len(temp_search_value)].upper():
 
                 # check if row is visible in the proxy model
                 proxy_index = self.proxy_model.mapFromSource(model_index)
@@ -461,13 +575,21 @@ class CustomTableView(QTableView):
                     proxy_index_rows_found.append(proxy_index.row())
 
         if len(proxy_index_rows_found) != 0:
-            update_index = self.indexFromSourcetoProxy(proxy_index_rows_found[0], view_index.column())
+            self.search_text += key_value
+            update_index = self.proxy_model.index(proxy_index_rows_found[0], view_index.column())
             self.setCurrentIndex(update_index)
             self.on_cell_clicked(update_index)
 
+            self.set_current_editor.setSelection(0, len(self.search_text))
 
-    # update combobox filters on data changed
+    # update combobox filters on data changed and footer value
     def model_data_changed(self, index_top_left, index_bottom_right, roles):
+
+        # update footer value
+        if self.footer_show:
+            if index_top_left.column() in self.footer_values:
+                self.setFooterValue(index_top_left.column())
+
         new_value = index_top_left.data(Qt.DisplayRole)
 
         # switch to visual column as my header combo buttons mapping are switched to visual indexes in the qheaderview
@@ -481,12 +603,20 @@ class CustomTableView(QTableView):
         button_delegate = ButtonDelegate(self.checked_indexes_rows, self.columns_with_checkboxes, self.editable_columns, self)
         button_delegate.onexpansionChange.connect(self.expansion_clicked)
         button_delegate.oncheckboxstateChange.connect(self.checkboxstateChange)
-        button_delegate.oneditorStarted.connect(self.update_vertical_header_arrow)
+        button_delegate.oneditorStarted.connect(self.update_vertical_header_arrow_and_editor)
         button_delegate.keyPressed.connect(self.handleLineEditKeyPress)
         self.setItemDelegate(button_delegate)
 
     # for updating what's filtered when checkbox state changes
-    def checkboxstateChange(self):
+    def checkboxstateChange(self, column: int):
+        #  update footer row data
+        if self.footer_show:
+            self.setFooterValue(column)
+
+        # reset search text if checkbox column is clicked on.. this has to be done because selection model doesn't activate
+        # due to overriding the cell paint with the styleditemddelegate
+        self.search_text = ""
+
         delegate = self.itemDelegate()
         checked_rows = delegate.checked_indexes_rows
         # update filter model
@@ -501,6 +631,8 @@ class CustomTableView(QTableView):
 
     def resizeEvent(self, event):
         self.update_sub_table_positions()
+        # viewport margins change needs to be in resize event or margin won't remain
+        self.setViewportMargins(self.verticalHeader().size().width(), self.horizontalHeader().size().height(), 0, self.viewport_bottom_margin)
         super(CustomTableView, self).resizeEvent(event)
 
     def horizontal_header_setup(self):
@@ -508,6 +640,7 @@ class CustomTableView(QTableView):
         self.setHorizontalHeader(self.header)
 
         self.header.combofilteritemClicked.connect(self.onfilterChange)
+        self.header.onupdateFooter.connect(self.footer_item_update_positions)
 
         # Set your desired background color for vertical headers using a stylesheet
         stylesheet = "QHeaderView::section:horizontal {background-color: lightgray; border: 1px solid gray;},"
@@ -580,13 +713,6 @@ class CustomTableView(QTableView):
         delegate = self.itemDelegate()
         checked_rows = delegate.checked_indexes_rows
 
-        """
-        # if one of the filters is from a column with checkboxes, filtering needs to be handled differently
-        if column_clicked in self.columns_with_checkboxes:
-            self.oncheckboxfilterChange(filter_value, combo_index, column_clicked, combobox)
-            return
-        """
-
         if combo_index == 0 and filter_value == "All":
             try:
                 self.filter_dict[column_clicked].clear()
@@ -628,43 +754,13 @@ class CustomTableView(QTableView):
         # update filter model
         self.proxy_model.setFilterData(self.filter_dict, checked_rows)
 
+        # update footer row values when stuff gets filtered
+        if self.footer_show:
+            for i in self.footer_values:
+                self.setFooterValue(i)
+
         # update tables if row with table gets filtered
         self.onfilterChange_sub_tables()
-
-    """
-    def oncheckboxfilterChange(self, filter_value: str, combo_index: int, column_clicked: int, combobox: QComboBox):
-        delegate = self.itemDelegate()
-        checked_rows = delegate.checked_indexes_rows
-
-        if combo_index == 0 and filter_value == "All":
-            try:
-                self.filter_dict[column_clicked].clear()
-                self.filter_checked_rows[column_clicked].clear()
-            except:
-                pass
-            self.change_combo_box_checkstates(combobox, True)
-        
-        elif combo_index == 1 and filter_value == "Clear":
-            if column_clicked not in self.columns_with_checkboxes:
-                base_range = 4
-            else:
-                base_range = 2
-
-            self.filter_dict[column_clicked] = [combobox.itemText(i) for i in range(base_range, combobox.count())]
-            self.filter_checked_rows[column_clicked] = checked_rows
-            self.change_combo_box_checkstates(combobox, False)
-        
-        elif column_clicked in self.filter_dict:
-            if filter_value in self.filter_dict[column_clicked]:
-                self.filter_dict[column_clicked].remove(filter_value)
-            else:
-                self.filter_dict[column_clicked].append(filter_value)
-        else:
-            self.filter_dict[column_clicked] = [filter_value]
-
-
-        self.proxy_model.setFilterData(self.filter_dict, self.filter_checked_rows)
-    """
 
     # remove tables if the row it's on gets filtered
     def onfilterChange_sub_tables(self):
@@ -700,10 +796,22 @@ class CustomTableView(QTableView):
     # this is needed to due scroll bar changing before table changes so the widgets won't map to correct spots
     # introducing a timer delay fixes this
     def update_sub_table_positions_timer(self):
+
+        sender = self.sender()
+        if isinstance(sender, QHeaderView):
+            self.footer_item_update_positions()
+
+        # note have to check viewport margins here on scrollbar changes on loadup of window or it won't show at startup
+        if self.viewportMargins().bottom() != self.viewport_bottom_margin:
+            self.setViewportMargins(self.verticalHeader().size().width(), self.horizontalHeader().size().height(), 0, self.viewport_bottom_margin)
+
         QTimer.singleShot(10, self.update_sub_table_positions)
 
     # input from signal is source index
     def expansion_clicked(self, row: int, expand: bool):
+        # reset search text if expansion column clicked
+        self.search_text = ""
+
         if expand:
             self.show_sub_table_in_row(sub_table_index_row=row)
         if not expand:
@@ -776,6 +884,11 @@ class CustomTableView(QTableView):
         self.header.raise_()
         self.verticalHeader().raise_()
 
+        # update footer position as well if footer
+        if self.footer_show:
+            self.footer_position()
+            self.footer_widget.raise_()
+
     def sub_table_create(self) -> Tuple[QWidget, QTableWidget]:
         upper_widget = mywidget(self)
         upper_widget.setContentsMargins(30, 0, 0, 0)
@@ -833,11 +946,14 @@ class CustomTableView(QTableView):
             total_height += table.rowHeight(row)
         return total_height
 
-    def update_vertical_header_arrow(self, index: QModelIndex):
+    def update_vertical_header_arrow_and_editor(self, index: QModelIndex, editor: QLineEdit = None):
         self.update_row_selection(index.row())
 
+        if editor:
+            self.set_current_editor = editor
+
     def on_cell_clicked(self, index: QModelIndex):
-        self.update_vertical_header_arrow(index)
+        self.update_vertical_header_arrow_and_editor(index)
 
         # activate editor on cell click
         if index.column() not in self.columns_with_checkboxes and index.column() != 0:
@@ -969,6 +1085,7 @@ class ComboBox(QComboBox):
 
         self.popupOpened.emit()
 
+    # for combobox all or clear filter options
     def check_uncheck_all_items(self, check_all: bool):
         logical_index = self.parent().logicalIndex(self.parent().m_buttons.index(self))
         if logical_index in self.parent().parent().columns_with_checkboxes:
@@ -995,6 +1112,7 @@ class ComboBox(QComboBox):
 
 class ButtonHeaderView(QHeaderView):
     combofilteritemClicked = pyqtSignal(str, int, int, object)
+    onupdateFooter = pyqtSignal()
 
     def __init__(self, parent):
         super().__init__(Qt.Horizontal, parent)  # Adjust orientation to Horizontal
@@ -1056,6 +1174,7 @@ class ButtonHeaderView(QHeaderView):
         self.m_buttons.extend(self.m_buttons_index_attachments[i] for i in logical_indices)
 
         self.adjustPositions()
+        self.onupdateFooter.emit()
 
     @pyqtSlot()
     # reset comboboxes when table columns change
@@ -1224,6 +1343,8 @@ class LazyDataViewer(QMainWindow):
     def __init__(self):
         super().__init__()
 
+        self.setGeometry(200, 200, 600, 400)
+
         self.main_widget = QWidget()
         self.main_layout = QVBoxLayout()
         self.mainbutton = QPushButton("test")
@@ -1236,8 +1357,8 @@ class LazyDataViewer(QMainWindow):
         editable_columns = [6]
 
         # main table data
-        rows = 10
-        columns = 7
+        rows = 30
+        columns = 8
 
         data = []
         for row in range(rows):
@@ -1247,7 +1368,7 @@ class LazyDataViewer(QMainWindow):
                     if row % 2 == 1:
                         row_data.append("")
                     else:
-                        row_data.append(f"Row {row}, Column {col}")
+                        row_data.append(f"{row}")
                 else:
                     row_data.append(f"Row {row}, Column {col}")
             data.append(row_data)
@@ -1278,17 +1399,20 @@ class LazyDataViewer(QMainWindow):
         for i in range(columns):
             column_headers.append(f"Column {i}")
 
+        footer_values = {1: "total", 4: "total", 6: "sum"}
+
         # custom qframe for tableview due to bug with widgets overlapping frame of tableview
         self.frame = myframe()
         self.model = LazyDataModel(data, columns_with_checkboxes, column_headers)
-        self.table_view = CustomTableView(self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data, editable_columns, self.frame)
+        self.table_view = CustomTableView(self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data,
+                                          editable_columns, self.frame, footer=False, footer_values=footer_values)
+
         self.main_layout.addWidget(self.frame)
 
         self.setCentralWidget(self.main_widget)  # Set the QTableView as the central widget
 
         end = time.time()
         print(end-start)
-
 
 class sub_TableWidget(QTableWidget):
     def __init__(self):
@@ -1391,6 +1515,10 @@ class sub_table_window(QDialog):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     viewer = LazyDataViewer()
+    viewer.show()
+
+    sys.exit(app.exec_())
+
     viewer.show()
 
     sys.exit(app.exec_())
