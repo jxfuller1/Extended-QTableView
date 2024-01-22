@@ -8,7 +8,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-Features that this currently has as of 1/14/2024:
+Features that this currently has as of 1/21/2024:
 
 1) Sorting
 2) Column Sections are movable
@@ -18,17 +18,18 @@ Features that this currently has as of 1/14/2024:
 6) Setting which columns you want to be editable
 7) Being able to edit cell data
 8) Filter combobox options update dynamically as cell data is changed
+9) In-column search   (as you type in a cell it will search the column and highlight the matching string typed)
+10) Available Footer Row
 
 Features left to finish:
 
-1) In-column searching (only partially working right now)
 2) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked
 3) Cleaning up code so user can easily make the table and choose options
 4) Being able to add new rows
 5) Adding/Changing some visual aspects
-6) Add Footer Row
 7) Add widget that shows current filters applied below footer row that hides/shows
 8) Add support for setting a column as date datatype with having, on hover, button pop-up for calendar and choosing date
+
 
 ![table](https://github.com/jxfuller1/QTableView-with-Checkboxes/assets/123666150/fd7c4bec-748d-4785-81ac-475bd6842013)
 
