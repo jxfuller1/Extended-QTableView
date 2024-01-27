@@ -30,14 +30,16 @@ Features left to finish:
 4) Being able to add new rows
 5) Adding/Changing some visual aspects
 
-
+Header drop down filters and sub-tables for each row:
 ![1](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/bcf1022e-7328-452f-9bd5-bb75ba64a500)
 
+In-Column Searching
 ![2](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/e3418c54-464c-4091-98fb-47a3db3651b2)
 
-
+Footer and Currently Applied Filter Display
 ![1](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/b34bb368-fdc4-4391-b834-cd6e90b46f69)
 
+Support for Calendar Date column(s)
 ![2](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/3b0c6d3b-7e34-40d5-a5fe-e85b9f4090ed)
 
 
