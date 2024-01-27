@@ -10,9 +10,9 @@ from PyQt5.QtGui import QColor, QPen, QFont, QStandardItemModel, QWheelEvent, QM
 from PyQt5.QtWidgets import QApplication, QTableView, QVBoxLayout, QMainWindow, QAbstractItemView, \
     QAbstractItemDelegate, QStyledItemDelegate, QPushButton, QWidget, QItemDelegate, QStyleOptionButton, QStyle, \
     QTableWidget, QHeaderView, QLabel, QLineEdit, QDialogButtonBox, QDialog, QTableWidgetItem, QComboBox, QFrame, \
-    QCheckBox, QStyleOptionViewItem, QScrollBar, QHBoxLayout, QSizePolicy, QSpacerItem
+    QCheckBox, QStyleOptionViewItem, QScrollBar, QHBoxLayout, QSizePolicy, QSpacerItem, QCalendarWidget, QDateEdit
 from PyQt5.QtCore import Qt, QAbstractTableModel, QEvent, QVariant, QSize, QRect, QModelIndex, pyqtSignal, \
-    QSortFilterProxyModel, QPoint, pyqtSlot, QCoreApplication, QTimer, QLocale, QItemSelectionModel
+    QSortFilterProxyModel, QPoint, pyqtSlot, QCoreApplication, QTimer, QLocale, QItemSelectionModel, QDate
 
 
 # function purely for testing performance
@@ -34,6 +34,32 @@ class LineEdit(QLineEdit):
     def focusInEvent(self, event):
         super().focusInEvent(event)
 
+
+class CustomDateEdit(QDateEdit):
+    onDateChanged = pyqtSignal(object)
+
+    def __init__(self, parent=None):
+        super(CustomDateEdit, self).__init__(parent)
+
+        self.setCalendarPopup(True)
+        self.popup_installed = False
+
+    def showEvent(self, event):
+        # Override showEvent to access the calendar popup and install event filter
+        super(CustomDateEdit, self).showEvent(event)
+
+        if not self.popup_installed:
+            # Access the calendar popup
+            calendar_popup = self.findChild(QCalendarWidget)
+
+            if calendar_popup:
+                self.popup_installed = True
+                calendar_popup.clicked.connect(self.on_calendar_clicked)
+
+    def on_calendar_clicked(self, date):
+        self.onDateChanged.emit(self)
+
+
 # delegate for entire qtableview
 class ButtonDelegate(QStyledItemDelegate):
     onexpansionChange = pyqtSignal(int, bool)
@@ -44,17 +70,24 @@ class ButtonDelegate(QStyledItemDelegate):
     # passing keypresses from line edit to tableview to support in-column searching
     keyPressed = pyqtSignal(QLineEdit, QKeyEvent)
 
-    def __init__(self, checked_indexes_rows, checked_indexed_columns, editable_columns, parent=None):
+    datekeyPressed = pyqtSignal(QDateEdit)
+
+    def __init__(self, checked_indexes_rows, checked_indexed_columns, editable_columns, datetime_columns, parent=None):
         super(ButtonDelegate, self).__init__(parent)
+
+        self.valid_date_formats = ["yyyy-MM-dd", "MM/dd/yyyy", "dd-MM-yyyy", "yyyy/MM/dd"]
+
+        # set matching date format to 1 by default, will auto change if another format found
+        self.matching_date_format = self.valid_date_formats[1]
 
         self.last_press_index = QModelIndex()
         self.last_release_index = QModelIndex()
         self.checked_indexes_rows = checked_indexes_rows
         self.checked_indexed_columns = checked_indexed_columns
         self.editable_columns = editable_columns
-        self.expanded_rows = []
+        self.datetime_columns = datetime_columns
 
-    #    self.new_highlighted_index = QModelIndex()
+        self.expanded_rows = []
 
     def eventFilter(self, obj, event):
         if isinstance(obj, QLineEdit) and event.type() == QKeyEvent.KeyPress:
@@ -212,7 +245,8 @@ class ButtonDelegate(QStyledItemDelegate):
 
     def createEditor(self, parent, option, index):
 
-        if index.column() not in self.checked_indexed_columns and index.column() != 0 and index.column() not in self.editable_columns:
+        if index.column() not in self.checked_indexed_columns and index.column() != 0 and \
+                index.column() not in self.editable_columns and index.column() not in self.datetime_columns:
             editor = LineEdit(parent)
             editor.setReadOnly(True)
             self.oneditorStarted.emit(index, editor)
@@ -226,20 +260,77 @@ class ButtonDelegate(QStyledItemDelegate):
             editor.installEventFilter(self)
             return editor
 
+        elif index.column() in self.datetime_columns:
+            editor = CustomDateEdit(parent)
+            editor.onDateChanged.connect(self.on_date_editor_changed)
+            editor.setMaximumWidth(18)
+            editor.setFocusPolicy(Qt.NoFocus)
+            editor.setCalendarPopup(True)
+            return editor
+
     def setEditorData(self, editor, index):
         # Set the initial content of the editor here
-        editor.setText(index.data(Qt.DisplayRole))
+        if index.column() not in self.datetime_columns:
+            editor.setText(index.data(Qt.DisplayRole))
+
+        if index.column() in self.datetime_columns:
+            cell_value = index.data(Qt.DisplayRole)
+
+            # find matching date format being used
+            matching_format = self.find_matching_format(cell_value, self.valid_date_formats)
+
+            # set date on calendar popup if valid date in cell, else set todays date
+            date = QDate.fromString(cell_value, matching_format)
+            if date.isValid():
+                editor.calendarWidget().setSelectedDate(date)
+            else:
+                today = QDate.currentDate()
+                editor.calendarWidget().setSelectedDate(today)
 
     def updateEditorGeometry(self, editor, option, index):
         # Set the geometry of the editor within the cell
-        cell_rect = option.rect
-        editor.setGeometry(cell_rect.x(), cell_rect.y(), cell_rect.width(), 20)
+        if index.column() not in self.datetime_columns:
+            cell_rect = option.rect
+            editor.setGeometry(cell_rect.x(), cell_rect.y(), cell_rect.width(), 20)
+
+        elif index.column() in self.datetime_columns:
+            cell_rect = option.rect
+            editor.setGeometry(cell_rect.x() + cell_rect.width()-18, cell_rect.y(), 18, 19)
 
     def setModelData(self, editor, model, index):
-        value = editor.text()
-        source_index = model.mapToSource(index)  # Map to the source index
-        source_model = model.sourceModel()  # Get the source model from the proxy model
-        source_model.setData(source_index, value, Qt.EditRole)
+        if index.column() not in self.datetime_columns:
+            value = editor.text()
+            source_index = model.mapToSource(index)  # Map to the source index
+            source_model = model.sourceModel()  # Get the source model from the proxy model
+            source_model.setData(source_index, value, Qt.EditRole)
+
+        elif index.column() in self.datetime_columns:
+            date = editor.date()
+            date_string = date.toString(self.matching_date_format)
+            source_index = model.mapToSource(index)  # Map to the source index
+            source_model = model.sourceModel()  # Get the source model from the proxy model
+            source_model.setData(source_index, date_string, Qt.EditRole)
+
+    def on_date_editor_changed(self, dateclicked):
+        self.datekeyPressed.emit(dateclicked)
+
+    # for finding matching date format string being used
+    def find_matching_format(self, date_string, date_formats):
+        for date_format in date_formats:
+            try:
+                # Try to convert the string using the current date format
+                date = QDate.fromString(date_string, date_format)
+                if date.isValid():
+                    # The conversion was successful, and the date is valid
+                    # set matching date format variable to matching date format
+                    self.matching_date_format = self.valid_date_formats[date_formats.index(date_format)]
+                    return date_format
+            except ValueError:
+                # Conversion failed for the current format
+                pass
+
+        # No matching format found
+        return None
 
 
 class HiddenRowsProxyModel(QSortFilterProxyModel):
@@ -368,8 +459,9 @@ class LazyDataModel(QAbstractTableModel):
 
 class CustomTableView(QTableView):
     def __init__(self, model, columns_with_checkboxes: List[int], checked_indexes_rows: Dict[int, List[int]],
-                 sub_table_data: List[List[str]], editable_columns: List[int] = None, parent=None, footer: bool = False,
-                 footer_values: dict = None):
+                 sub_table_data: List[List[str]], editable_columns: List[int] = None, parent=None,
+                 datetime_columns: List[int] = None, footer: bool = False, footer_values: dict = None):
+
         super().__init__(parent)
         # parent being a qframe
         parent.resizeSignal.connect(self.handle_parent_resize)
@@ -382,14 +474,20 @@ class CustomTableView(QTableView):
         self.filter_checked_rows = {}
         self.editable_columns = editable_columns
         self.set_current_editor = None
+        self.datetime_columns = datetime_columns
 
         self.footer_show = footer
         self.footer_row_boxes = []
         self.footer_values = footer_values
 
+        self.footer_height = 0
+        if footer:
+            self.footer_height = 25
+
+        self.filter_footer_margin_height = 25
         self.viewport_bottom_margin = 0
         if self.footer_show:
-            self.viewport_bottom_margin = 25
+            self.viewport_bottom_margin = self.viewport_bottom_margin + self.footer_height
 
         self.search_text = ""
 
@@ -435,6 +533,8 @@ class CustomTableView(QTableView):
 
         if self.footer_show:
             self.footer()
+
+        self.display_filter_setup()
 
     def footer(self):
         self.footer_widget = QWidget(self)
@@ -517,7 +617,7 @@ class CustomTableView(QTableView):
                 edit_box = self.footer_row_boxes[logical_indices[i]]
                 proxy_width = self.columnWidth(logical_indices[i])
 
-                edit_box.setGeometry(x+padding, padding, proxy_width-padding-padding, self.viewport_bottom_margin-padding-padding)
+                edit_box.setGeometry(x+padding, padding, proxy_width-padding-padding,  self.footer_height-padding-padding)
                 x += proxy_width
 
     def footer_position(self):
@@ -531,8 +631,114 @@ class CustomTableView(QTableView):
         footer_width = min(combined_column_width, view_size.width())
 
         self.footer_widget.setFixedWidth(footer_width+vertical_header_width)
-        self.footer_widget.setFixedHeight(self.viewport_bottom_margin)
+        self.footer_widget.setFixedHeight(self.footer_height)
         self.footer_widget.move(view_position.x()-vertical_header_width, view_position.y()+view_size.height())
+
+    def display_filter_setup(self):
+        padding = 4
+        vertical_header_width = self.verticalHeader().width()
+
+        self.filter_widget = QWidget(self)
+        stylesheet = "background-color: darkgrey;"
+        self.filter_widget.setStyleSheet(stylesheet)
+
+        # create footer lineedits
+        self.filter_widget_combo = QComboBox(self.filter_widget)
+        self.filter_widget_combo.setFocusPolicy(Qt.NoFocus)
+
+        self.filter_clear_button = QPushButton(self.filter_widget)
+        self.filter_clear_button.setText("X")
+        self.filter_clear_button.setMinimumWidth(0)
+        self.filter_clear_button.setMinimumHeight(0)
+        self.filter_clear_button.setFixedSize(13, 13)
+        self.filter_clear_button.clicked.connect(self.display_filter_remove)
+
+        self.filter_widget_label = QLabel(self.filter_widget)
+
+        self.filter_widget_combo.setGeometry(vertical_header_width, padding, 19, 20)
+        self.filter_clear_button.move(vertical_header_width*2 + 4, padding+3)
+        self.filter_widget_label.move(vertical_header_width*3 + 10, padding+3)
+
+        self.display_filter_position()
+        self.filter_widget.hide()
+
+    def display_filter_remove(self):
+        # recheck all items in corresponding filter combobox if column in filter_dict
+        for i in self.filter_dict:
+            logicalindex = self.header.visualIndex(i)
+            combobox = self.header.m_buttons[logicalindex]
+            self.change_combo_box_checkstates(combobox, True)
+
+        self.filter_dict.clear()
+
+        # update filter model
+        self.proxy_model.setFilterData(self.filter_dict)
+
+        # update footer values again
+        if self.footer_show:
+            for i in self.footer_values:
+                self.setFooterValue(i)
+
+        self.display_filter_update()
+
+    def display_filter_position(self):
+        # take into account vertical header width, as i want footer to overlay on top of vertical header
+        vertical_header_width = self.verticalHeader().width()
+
+        view_size = self.viewport().size()
+        view_position = self.viewport().mapToParent(QPoint(0, 0))
+
+        self.filter_widget.setFixedWidth(view_size.width()+vertical_header_width)
+        self.filter_widget.setFixedHeight(self.filter_footer_margin_height)
+
+        self.filter_widget.move(view_position.x()-vertical_header_width, view_position.y()+view_size.height()+self.footer_height)
+
+    def display_filter_update(self):
+        self.display_filter_position()
+
+        # check if all filter items in filter_dict are empty
+        count = 0
+        for i in self.filter_dict:
+            if len(self.filter_dict[i]) != 0:
+                count +=1
+
+        if count == 0:
+            self.filter_widget_combo.clear()
+            self.filter_widget_label.setText("")
+            self.filter_widget_label.adjustSize()
+            self.filter_widget.hide()
+            self.viewport_bottom_margin = self.footer_height
+            self.setViewportMargins(self.verticalHeader().size().width(), self.horizontalHeader().size().height(), 0, self.viewport_bottom_margin)
+        else:
+            label_text = ""
+            self.filter_widget_combo.clear()
+
+            for key, value in self.filter_dict.items():
+
+                header_label = self.model.headerData(key, Qt.Horizontal, Qt.DisplayRole)
+
+                if len(value) != 0:
+                    text = ", ".join(str(x) for x in value)
+                    combo_item = str(header_label) + " = " + text
+                    self.filter_widget_combo.addItem(combo_item)
+
+                    label = "(" + combo_item + ")  "
+                    label_text += label
+
+            # reset combobox max size width
+            max_width = 0
+            for i in range(self.filter_widget_combo.count()):
+                width = self.filter_widget_combo.fontMetrics().width(self.filter_widget_combo.itemText(i))
+                max_width = max(max_width, width)
+
+            self.filter_widget_combo.view().setFixedWidth(max_width+20)
+
+            self.filter_widget_label.setText(label_text)
+            self.filter_widget_label.adjustSize()
+            self.filter_widget.show()
+
+            self.viewport_bottom_margin = self.footer_height + self.filter_footer_margin_height
+            self.setViewportMargins(self.verticalHeader().size().width(), self.horizontalHeader().size().height(), 0, self.viewport_bottom_margin)
 
     # for resetting the in-column searching, should only reset when column changes
     def handleCurrentChanged(self, current, previous):
@@ -600,12 +806,18 @@ class CustomTableView(QTableView):
 
     # set text alignments and add columns with checkboxes
     def setDelegates(self):
-        button_delegate = ButtonDelegate(self.checked_indexes_rows, self.columns_with_checkboxes, self.editable_columns, self)
+        button_delegate = ButtonDelegate(self.checked_indexes_rows, self.columns_with_checkboxes, self.editable_columns, self.datetime_columns, self)
         button_delegate.onexpansionChange.connect(self.expansion_clicked)
         button_delegate.oncheckboxstateChange.connect(self.checkboxstateChange)
         button_delegate.oneditorStarted.connect(self.update_vertical_header_arrow_and_editor)
         button_delegate.keyPressed.connect(self.handleLineEditKeyPress)
+        button_delegate.datekeyPressed.connect(self.handleDateeditKeyPress)
+
         self.setItemDelegate(button_delegate)
+
+    def handleDateeditKeyPress(self, dateEdit):
+        self.commitData(dateEdit)
+        self.closeEditor(dateEdit, QAbstractItemDelegate.NoHint)
 
     # for updating what's filtered when checkbox state changes
     def checkboxstateChange(self, column: int):
@@ -759,6 +971,9 @@ class CustomTableView(QTableView):
             for i in self.footer_values:
                 self.setFooterValue(i)
 
+        # update filter footer on filter changes
+        self.display_filter_update()
+
         # update tables if row with table gets filtered
         self.onfilterChange_sub_tables()
 
@@ -888,6 +1103,9 @@ class CustomTableView(QTableView):
         if self.footer_show:
             self.footer_position()
             self.footer_widget.raise_()
+
+        self.display_filter_position()
+        self.filter_widget.raise_()
 
     def sub_table_create(self) -> Tuple[QWidget, QTableWidget]:
         upper_widget = mywidget(self)
@@ -1369,6 +1587,9 @@ class LazyDataViewer(QMainWindow):
                         row_data.append("")
                     else:
                         row_data.append(f"{row}")
+                elif col == 6:
+                    row_data.append("01/11/2024")
+
                 else:
                     row_data.append(f"Row {row}, Column {col}")
             data.append(row_data)
@@ -1394,18 +1615,20 @@ class LazyDataViewer(QMainWindow):
                 table_data.append(row_data)
             sub_table_data.append(table_data)
 
-
         column_headers = []
         for i in range(columns):
             column_headers.append(f"Column {i}")
 
         footer_values = {1: "total", 4: "total", 6: "sum"}
 
+        datetime_columns = [7]
+
         # custom qframe for tableview due to bug with widgets overlapping frame of tableview
         self.frame = myframe()
         self.model = LazyDataModel(data, columns_with_checkboxes, column_headers)
         self.table_view = CustomTableView(self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data,
-                                          editable_columns, self.frame, footer=False, footer_values=footer_values)
+                                          editable_columns=editable_columns, parent=self.frame, datetime_columns=datetime_columns,
+                                          footer=True, footer_values=footer_values)
 
         self.main_layout.addWidget(self.frame)
 
@@ -1413,6 +1636,7 @@ class LazyDataViewer(QMainWindow):
 
         end = time.time()
         print(end-start)
+
 
 class sub_TableWidget(QTableWidget):
     def __init__(self):
@@ -1498,7 +1722,6 @@ class sub_table_window(QDialog):
 
         self.close()
 
-
     def find_layout_children(self, widget: QWidget) -> List[str]:
         widget_text = []
 
@@ -1519,6 +1742,3 @@ if __name__ == "__main__":
 
     sys.exit(app.exec_())
 
-    viewer.show()
-
-    sys.exit(app.exec_())
