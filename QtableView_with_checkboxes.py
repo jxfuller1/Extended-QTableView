@@ -458,9 +458,10 @@ class LazyDataModel(QAbstractTableModel):
 
 
 class CustomTableView(QTableView):
-    def __init__(self, model, columns_with_checkboxes: List[int], checked_indexes_rows: Dict[int, List[int]],
-                 sub_table_data: List[List[str]], editable_columns: List[int] = None, parent=None,
-                 datetime_columns: List[int] = None, footer: bool = False, footer_values: dict = None):
+    def __init__(self, model, columns_with_checkboxes: List[int] = None, checked_indexes_rows: Dict[int, List[int]] = None,
+                 sub_table_data: List[List[str]] = None, editable_columns: List[int] = None, parent=None,
+                 datetime_columns: List[int] = None, footer: bool = False, footer_values: dict = None,
+                 subtable_col_checkboxes: List[int] = None, subtable_header_labels: List[str] = None):
 
         super().__init__(parent)
         # parent being a qframe
@@ -475,6 +476,8 @@ class CustomTableView(QTableView):
         self.editable_columns = editable_columns
         self.set_current_editor = None
         self.datetime_columns = datetime_columns
+        self.subtable_col_checkboxes = subtable_col_checkboxes
+        self.subtable_header_labels = subtable_header_labels
 
         self.footer_show = footer
         self.footer_row_boxes = []
@@ -1059,7 +1062,6 @@ class CustomTableView(QTableView):
     def show_sub_table_in_row(self, sub_table_index_row: int):
         widget, sub_table = self.sub_table_create()
         self.sub_table_populate(sub_table_index_row, widget)
-        sub_table.itemChanged.connect(self.sub_table_item_changed)
 
         # add widget to list of widgets currently open
         self.sub_table_widgets[sub_table_index_row] = widget
@@ -1113,21 +1115,18 @@ class CustomTableView(QTableView):
         upper_layout = QVBoxLayout()
         upper_layout.setContentsMargins(0, 0, 0, 10)
         sub_table = sub_TableWidget()
+        sub_table.rowdataChanged.connect(self.sub_table_items_changed)
+
         upper_layout.addWidget(sub_table)
         upper_widget.setLayout(upper_layout)
         return upper_widget, sub_table
 
     # update main sub table data var for qtableview when an item is changed
-    def sub_table_item_changed(self, item):
-
-        # return the widget for the cell that was changed
-        widget = item.tableWidget().parent()
+    def sub_table_items_changed(self, row: int, row_data: List[str], table: QTableWidget):
 
         # Find row index (based on key value in the dictionary that im storing the opened table widgets in)
-        table_row = [key for key, value in self.sub_table_widgets.items() if value == widget]
-
-        if item:
-            self.sub_table_data[table_row[0]][item.row()][item.column()] = item.text()
+        table_row = [key for key, value in self.sub_table_widgets.items() if value == table.parent()]
+        self.sub_table_data[table_row[0]][row] = row_data
 
     def sub_table_populate(self, sub_table_index: int, widget: QWidget):
         table = None
@@ -1143,14 +1142,37 @@ class CustomTableView(QTableView):
             table.setRowCount(rows)
             table.setColumnCount(columns)
 
-            table.setHorizontalHeaderLabels(["NCR No.", "Disposition", "Extra"])
+            if self.subtable_header_labels:
+                table.setHorizontalHeaderLabels(self.subtable_header_labels)
 
-             # Populate the table with random data
+             # Populate with self.sub_table_data variabled
             for row in range(rows):
                 table.setRowHeight(row, 18)
                 for col in range(columns):
-                    item = QTableWidgetItem(self.sub_table_data[sub_table_index][row][col])
-                    table.setItem(row, col, item)
+                    if col not in self.subtable_col_checkboxes:
+                        item = QTableWidgetItem(self.sub_table_data[sub_table_index][row][col])
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                        table.setItem(row, col, item)
+
+                    elif col in self.subtable_col_checkboxes:
+                        widget = table.make_cell_checkbox()
+                        check_value = self.sub_table_data[sub_table_index][row][col]
+                        self.subtable_initial_checkbox_state(widget, check_value)
+                        table.setCellWidget(row, col, widget)
+
+    def subtable_initial_checkbox_state(self, widget: QWidget, value: str):
+        if widget:
+            checkbox_widget = None
+            # get the qtablewidgetitem (which is in the Qwidget)
+            for child_widget in widget.findChildren(QWidget):
+                if isinstance(child_widget, QCheckBox):
+                    checkbox_widget = child_widget
+
+            if checkbox_widget is not None:
+                if value.upper() == "TRUE" or value.upper() == "T":
+                    checkbox_widget.setCheckState(Qt.Checked)
+                else:
+                    checkbox_widget.setCheckState(Qt.Unchecked)
 
     def get_sub_table_Height(self, widget: QWidget) -> int:
         table = None
@@ -1182,6 +1204,12 @@ class CustomTableView(QTableView):
             self.header.outof_combo_popup += 1
         # Handle cell clicked event here
        # print("Cell clicked at row:", index.row(), "column:", index.column())
+
+    def addMainRow(self):
+        print("test")
+
+    def addSubRow(self):
+        print('sub')
 
 
 # for sub_table widget
@@ -1565,8 +1593,18 @@ class LazyDataViewer(QMainWindow):
 
         self.main_widget = QWidget()
         self.main_layout = QVBoxLayout()
-        self.mainbutton = QPushButton("test")
-        self.main_layout.addWidget(self.mainbutton)
+
+        self.main_horizontal = QHBoxLayout()
+        self.sql_combo = QComboBox()
+        self.sql_combo.addItem("For SQL tables to be added")
+        self.mainbutton = QPushButton("Add Row Main Table")
+        self.subbutton = QPushButton("Add Row Sub Table")
+
+        self.main_horizontal.addWidget(self.sql_combo)
+        self.main_horizontal.addWidget(self.mainbutton)
+        self.main_horizontal.addWidget(self.subbutton)
+
+        self.main_layout.addLayout(self.main_horizontal)
         self.main_widget.setLayout(self.main_layout)
 
         start = time.time()
@@ -1575,7 +1613,7 @@ class LazyDataViewer(QMainWindow):
         editable_columns = [6]
 
         # main table data
-        rows = 30
+        rows = 20
         columns = 8
 
         data = []
@@ -1596,6 +1634,7 @@ class LazyDataViewer(QMainWindow):
 
         # which columsn to have checkboxes in instead of text
         columns_with_checkboxes = [2, 3, 4, 5]
+        sub_table_columns_with_checkboxes = [3]
 
         # checkbox data for the columns with checkboxes (this would be replaced by grabbing data from say a sql table)
         # this is just a setup for grabbing "data" for testing purposes
@@ -1610,14 +1649,19 @@ class LazyDataViewer(QMainWindow):
             table_data = []
             for row in range(3):
                 row_data = []
-                for col in range(3):
-                    row_data.append(f'sub Row {row}, sub Col {col}')
+                for col in range(4):
+                    if col < 3:
+                        row_data.append(f'sub Row {row}, sub Col {col}')
+                    if col == 3:
+                        row_data.append("True")
                 table_data.append(row_data)
             sub_table_data.append(table_data)
 
         column_headers = []
         for i in range(columns):
             column_headers.append(f"Column {i}")
+
+        sub_table_headers_labels = ["NCR No.", "Disposition", "Extra", "Completed"]
 
         footer_values = {1: "total", 4: "total", 6: "sum"}
 
@@ -1628,7 +1672,11 @@ class LazyDataViewer(QMainWindow):
         self.model = LazyDataModel(data, columns_with_checkboxes, column_headers)
         self.table_view = CustomTableView(self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data,
                                           editable_columns=editable_columns, parent=self.frame, datetime_columns=datetime_columns,
-                                          footer=True, footer_values=footer_values)
+                                          footer=True, footer_values=footer_values, subtable_col_checkboxes=sub_table_columns_with_checkboxes,
+                                          subtable_header_labels=sub_table_headers_labels)
+
+        self.mainbutton.clicked.connect(self.table_view.addMainRow)
+        self.subbutton.clicked.connect(self.table_view.addSubRow)
 
         self.main_layout.addWidget(self.frame)
 
@@ -1639,6 +1687,8 @@ class LazyDataViewer(QMainWindow):
 
 
 class sub_TableWidget(QTableWidget):
+    rowdataChanged = pyqtSignal(int, list, object)
+
     def __init__(self):
         super(sub_TableWidget, self).__init__()
 
@@ -1659,27 +1709,95 @@ class sub_TableWidget(QTableWidget):
     def sub_table_clicked(self, index):
         sender = self.sender()
 
-        # Retrieve data from the clicked row
-        row_data = [sender.parent().item(index, j).text() for j in range(sender.parent().columnCount())]
+        header_labels = [sender.parent().horizontalHeaderItem(col).text() for col in range(sender.parent().columnCount())]
+        checkbox_columns = []
+        row_data = []
 
-        self.dlg = sub_table_window(self, sender.parent(), index, row_data)
+        for col in range(sender.parent().columnCount()):
+            # check if cell widget
+            widget = self.cellWidget(index, col)
+            if not widget:
+                item = sender.parent().item(index, col).text()
+                row_data.append(str(item))
+            else:
+                if widget:
+                    checkbox_widget = None
+                    for child_widget in widget.findChildren(QWidget):
+                        if isinstance(child_widget, QCheckBox):
+                            checkbox_widget = child_widget
+
+                    if checkbox_widget:
+                        checkbox_columns.append(col)
+                        row_data.append(str(checkbox_widget.isChecked()))
+
+        self.dlg = sub_table_window(self, sender.parent(), index, row_data, checkbox_columns, header_labels)
         self.dlg.onsubtableChange.connect(self.sub_table_adjust)
         self.dlg.exec()
 
     def sub_table_adjust(self, table: QTableWidget, row: int, row_data: List[str]):
-        for i in range(table.columnCount()):
-            item = QTableWidgetItem(row_data[i])
-            table.setItem(row, i, item)
+        for col in range(table.columnCount()):
+            # check if cell widget
+            widget = self.cellWidget(row, col)
+            if not widget:
+                item = QTableWidgetItem(row_data[col])
+                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                table.setItem(row, col, item)
+            else:
+                if widget:
+                    checkbox_widget = None
+                    for child_widget in widget.findChildren(QWidget):
+                        if isinstance(child_widget, QCheckBox):
+                            checkbox_widget = child_widget
+
+                    if checkbox_widget:
+                        if row_data[col].upper() == "TRUE" or row_data[col].upper() == "T":
+                            checkbox_widget.setCheckState(Qt.Checked)
+                        else:
+                            checkbox_widget.setCheckState(Qt.Unchecked)
+
+        # send to parent to change the subtable data variable
+        self.rowdataChanged.emit(row, row_data, self)
+
+    def make_cell_checkbox(self) -> QWidget:
+        upper_widget = QWidget()
+        upper_widget.setContentsMargins(0, 0, 0, 0)
+        upper_layout = QVBoxLayout()
+        upper_layout.setContentsMargins(0, 0, 0, 0)
+        upper_layout.setAlignment(Qt.AlignCenter)
+        checkbox = QCheckBox("")
+
+        # make checkbox readonly essentially
+        checkbox.setAttribute(Qt.WA_TransparentForMouseEvents)
+        checkbox.setFocusPolicy(Qt.NoFocus)
+
+        checkbox.stateChanged.connect(lambda state, checkbox=checkbox: self.checkbox_value_changed(state))
+        upper_layout.addWidget(checkbox)
+        upper_widget.setLayout(upper_layout)
+        return upper_widget
+
+    # not used for anything at the moment, will be used when this is connected with a SQL database to update dateabase
+    @pyqtSlot()
+    def checkbox_value_changed(self, state: int):
+        # get to the Qwidget item (which is the parent), as this is what i need to figure out what row it's in
+        widget = self.sender().parent()
+        row = self.indexAt(widget.pos()).row()
+        col = self.indexAt(widget.pos()).column()
+
+        #  print(widget)
+        #  print(row, col)
+
 
 # for changes values in the sub_table
 class sub_table_window(QDialog):
     onsubtableChange = pyqtSignal(object, int, list)
 
-    def __init__(self, parent, table, row, row_data):
+    def __init__(self, parent, table, row, row_data, checkbox_columns, header_labels):
         super(QDialog, self).__init__(parent)
         self.table = table
         self.row_data = row_data
         self.row = row
+        self.checkbox_columns = checkbox_columns
+        self.header_labels = header_labels
 
         self.initUI()
 
@@ -1687,6 +1805,9 @@ class sub_table_window(QDialog):
 
         self.setWindowTitle("Change sub-table data?")
         self.setStyleSheet("QDialog {background-color: lightgrey;}")
+
+        self.line_edits = []
+        self.checkboxes = []
 
         QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(QBtn)
@@ -1696,41 +1817,57 @@ class sub_table_window(QDialog):
         self.layout = QVBoxLayout()
         self.layout.addSpacing(20)
 
-        labels = ["NCR No.", "Disposition", "Extra"]
-
         for index, value in enumerate(self.row_data):
             myfont = QFont()
             myfont.setBold(True)
-            label = QLabel(labels[index])
-            label.setFont(myfont)
-            label.setAlignment(Qt.AlignHCenter)
 
-            line_edit = QLineEdit()
-            line_edit.setText(value)
+            if index not in self.checkbox_columns:
+                edit_layout = QHBoxLayout()
+                label = QLabel(self.header_labels[index])
+                label.setFont(myfont)
+                label.setAlignment(Qt.AlignHCenter)
 
-            self.layout.addWidget(label)
-            self.layout.addWidget(line_edit)
-            self.layout.addSpacing(20)
+                line_edit = QLineEdit()
+                line_edit.setText(value)
+
+                self.line_edits.append(line_edit)
+                edit_layout.addWidget(label)
+                edit_layout.addWidget(line_edit)
+
+                self.layout.addLayout(edit_layout)
+
+              #  self.layout.addWidget(label)
+             #   self.layout.addWidget(line_edit)
+               # self.layout.addSpacing(20)
+            elif index in self.checkbox_columns:
+                check = QCheckBox(self.header_labels[index])
+                self.checkboxes.append(check)
+
+                if value.upper() == "TRUE" or value.upper() == "T":
+                    check.setCheckState(Qt.Checked)
+                else:
+                    check.setCheckState(Qt.Unchecked)
+
+                self.layout.addWidget(check, alignment=Qt.AlignHCenter)
+               # self.layout.addSpacing(20)
 
         self.layout.addWidget(self.buttonBox)
         self.setLayout(self.layout)
 
     def accept_changes(self):
-        all_line_edits_values = self.find_layout_children(QLineEdit)
+        row_values = self.find_layout_children()
 
-        self.onsubtableChange.emit(self.table, self.row, all_line_edits_values)
+        self.onsubtableChange.emit(self.table, self.row, row_values)
 
         self.close()
 
-    def find_layout_children(self, widget: QWidget) -> List[str]:
+    def find_layout_children(self) -> List[str]:
         widget_text = []
 
-        for i in range(self.layout.count()):
-            item = self.layout.itemAt(i)
-
-            # Check if the item is a widget and is of the specified type
-            if item and item.widget() and isinstance(item.widget(), widget):
-                widget_text.append(item.widget().text())
+        for i in self.line_edits:
+            widget_text.append(i.text())
+        for i in self.checkboxes:
+            widget_text.append(str(i.isChecked()))
 
         return widget_text
 
