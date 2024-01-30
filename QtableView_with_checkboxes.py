@@ -72,7 +72,7 @@ class ButtonDelegate(QStyledItemDelegate):
 
     datekeyPressed = pyqtSignal(QDateEdit)
 
-    def __init__(self, checked_indexes_rows, checked_indexed_columns, editable_columns, datetime_columns, parent=None):
+    def __init__(self, checked_indexes_rows, checked_indexed_columns, editable_columns, datetime_columns, expandable_rows, parent=None):
         super(ButtonDelegate, self).__init__(parent)
 
         self.valid_date_formats = ["yyyy-MM-dd", "MM/dd/yyyy", "dd-MM-yyyy", "yyyy/MM/dd"]
@@ -86,6 +86,7 @@ class ButtonDelegate(QStyledItemDelegate):
         self.checked_indexed_columns = checked_indexed_columns
         self.editable_columns = editable_columns
         self.datetime_columns = datetime_columns
+        self.expandable_rows = expandable_rows
 
         self.expanded_rows = []
 
@@ -137,7 +138,7 @@ class ButtonDelegate(QStyledItemDelegate):
             text_rect = option.rect.adjusted(3, 3, -3, -3)
             painter.drawText(text_rect, Qt.AlignTop | Qt.AlignLeft, text)
 
-        if index.column() == 0:
+        if index.column() == 0 and self.expandable_rows:
             # Set the fixed size for the box
             box_size = 13
 
@@ -161,13 +162,22 @@ class ButtonDelegate(QStyledItemDelegate):
             painter.setPen(border_color)
             painter.drawText(text_rect, Qt.AlignCenter, text)
 
+        if index.column() == 0 and not self.expandable_rows:
+            text = index.data(Qt.DisplayRole)
+            text_rect = option.rect.adjusted(3, 3, -3, -3)
+            painter.drawText(text_rect, Qt.AlignTop | Qt.AlignLeft, text)
+
         self.highlighted_index = QModelIndex()
 
     def editorEvent(self, event, model, option, index):
         # map clicked row to source model index (needs to be done if user sorts/filters)
         index = index.model().mapToSource(index)
 
-        if index.column() in self.checked_indexed_columns or index.column() == 0:
+        expansion_rows = False
+        if index.column() == 0 and self.expandable_rows:
+            expansion_rows = True
+
+        if index.column() in self.checked_indexed_columns or expansion_rows:
             button_rect = option.rect
             if event.type() == QEvent.MouseButtonPress:
                 if button_rect.contains(event.pos()):
@@ -182,7 +192,7 @@ class ButtonDelegate(QStyledItemDelegate):
                 return True
 
             elif event.type() == event.MouseMove:
-                # create a bounding box slightly smaller than the cell itsel.  When mouse movements are detected, if within
+                # create a bounding box slightly smaller than the cell itself.  When mouse movements are detected, if within
                 # the boudning box this will change mouse over state in paint().  If mouse within cell but outside this smaller
                 # bounding box in the cell, it will remove mouse over state in paint()
                 new_rect = QRect(option.rect.x()+6, option.rect.y()+4,  option.rect.width()-12, option.rect.height()-8)
@@ -205,7 +215,7 @@ class ButtonDelegate(QStyledItemDelegate):
         return super(ButtonDelegate, self).editorEvent(event, model, option, index)
 
     def change_button_state(self, row: int, column: int):
-        if column == 0:
+        if column == 0 and self.expandable_rows:
             if self.last_press_index == self.last_release_index:
                 if row in self.expanded_rows:
                     self.expanded_rows.remove(row)
@@ -244,8 +254,11 @@ class ButtonDelegate(QStyledItemDelegate):
             print(f"Added; Row index {row}, Column index {column}")
 
     def createEditor(self, parent, option, index):
+        expansion_rows = False
+        if index.column() == 0 and self.expandable_rows:
+            expansion_rows = True
 
-        if index.column() not in self.checked_indexed_columns and index.column() != 0 and \
+        if index.column() not in self.checked_indexed_columns and not expansion_rows and \
                 index.column() not in self.editable_columns and index.column() not in self.datetime_columns:
             editor = LineEdit(parent)
             editor.setReadOnly(True)
@@ -388,19 +401,18 @@ class HiddenRowsProxyModel(QSortFilterProxyModel):
 
 
 class LazyDataModel(QAbstractTableModel):
-    def __init__(self, data, columns_with_checkboxes, column_headers):
+    def __init__(self, data, columns_with_checkboxes, column_headers, expandable_rows):
         super().__init__()
 
         self.table_data = data
         self.column_headers = column_headers
         self.checkbox_indexes = columns_with_checkboxes
         self.row_clicked = -1
+        self.expandable_rows = expandable_rows
 
         self.font = QFont()
         self.font.setBold(True)
         self.font.setPointSize(8)  # Set the desired font size
-
-     #   self.search_text = None
 
     def rowCount(self, parent=None):
         return len(self.table_data)
@@ -411,7 +423,10 @@ class LazyDataModel(QAbstractTableModel):
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and index.column() >= 0 and index.column() not in self.checkbox_indexes:
             # -1 on the column to account for the expansion column
-            row_value = self.table_data[index.row()][index.column()-1]
+            if self.expandable_rows:
+                row_value = self.table_data[index.row()][index.column()-1]
+            else:
+                row_value = self.table_data[index.row()][index.column()]
             return row_value
         elif role == Qt.EditRole:
             return False
@@ -447,10 +462,16 @@ class LazyDataModel(QAbstractTableModel):
         if role == Qt.EditRole:
 
             # -1 on the column to account for the expansion column, set new value if value changed in cell
-            get_value = self.table_data[index.row()][index.column()-1]
+            if self.expandable_rows:
+                get_value = self.table_data[index.row()][index.column()-1]
+            else:
+                get_value = self.table_data[index.row()][index.column()]
 
             if value != get_value:
-                self.table_data[index.row()][index.column()-1] = value
+                if self.expandable_rows:
+                    self.table_data[index.row()][index.column()-1] = value
+                else:
+                    self.table_data[index.row()][index.column()] = value
                 self.dataChanged.emit(index, index)
                 return True
             return False
@@ -461,7 +482,7 @@ class CustomTableView(QTableView):
     def __init__(self, model, columns_with_checkboxes: List[int] = None, checked_indexes_rows: Dict[int, List[int]] = None,
                  sub_table_data: List[List[str]] = None, editable_columns: List[int] = None, parent=None,
                  datetime_columns: List[int] = None, footer: bool = False, footer_values: dict = None,
-                 subtable_col_checkboxes: List[int] = None, subtable_header_labels: List[str] = None):
+                 subtable_col_checkboxes: List[int] = None, subtable_header_labels: List[str] = None, expandable_rows: bool = True):
 
         super().__init__(parent)
         # parent being a qframe
@@ -478,6 +499,7 @@ class CustomTableView(QTableView):
         self.datetime_columns = datetime_columns
         self.subtable_col_checkboxes = subtable_col_checkboxes
         self.subtable_header_labels = subtable_header_labels
+        self.expandable_rows = expandable_rows
 
         self.footer_show = footer
         self.footer_row_boxes = []
@@ -503,6 +525,10 @@ class CustomTableView(QTableView):
         self.columns_with_checkboxes = columns_with_checkboxes
         self.checked_indexes_rows = checked_indexes_rows
         self.sub_table_data = sub_table_data
+
+        # check to make sure these 3 arguments do not contain the same column numbers, print error if so, because
+        # if they have the same columns, it causes crashes
+        self.column_arguments_same()
 
         self.proxy_model = HiddenRowsProxyModel()
         self.proxy_model.setSourceModel(self.model)
@@ -539,6 +565,31 @@ class CustomTableView(QTableView):
 
         self.display_filter_setup()
 
+        self.resizeColumnsToContents()
+        if self.expandable_rows:
+            self.setColumnWidth(0, 20)
+    
+    # a print check to see whether columns integers picked for these arguments passed are the same, AS THIS WILL CAUSE A CRASH
+    def column_arguments_same(self):
+        # check to make sure these 3 arguments do not contain the same column numbers, print error if so, because
+        # if they have the same columns, it causes crashes
+        error = False
+        if self.editable_columns and self.datetime_columns:
+            common_elements_check1 = set(self.editable_columns) & set(self.datetime_columns)
+            if common_elements_check1:
+                error = True
+        if self.editable_columns and self.columns_with_checkboxes:
+            common_elements_check2 = set(self.editable_columns) & set(self.columns_with_checkboxes)
+            if common_elements_check2:
+                error = True
+        if self.datetime_columns and self.columns_with_checkboxes:
+            common_elements_check3 = set(self.datetime_columns) & set(self.columns_with_checkboxes)
+            if common_elements_check3:
+                error = True 
+        
+        if error:
+            print("ERROR, Cannot have same columns for editable columns, columns with checkboxes or datetime columns, THIS WILL CAUSE A CRASH")
+        
     def footer(self):
         self.footer_widget = QWidget(self)
         stylesheet = "background-color: lightgrey;"
@@ -809,7 +860,8 @@ class CustomTableView(QTableView):
 
     # set text alignments and add columns with checkboxes
     def setDelegates(self):
-        button_delegate = ButtonDelegate(self.checked_indexes_rows, self.columns_with_checkboxes, self.editable_columns, self.datetime_columns, self)
+        button_delegate = ButtonDelegate(self.checked_indexes_rows, self.columns_with_checkboxes, self.editable_columns,\
+                                         self.datetime_columns, self.expandable_rows, self)
         button_delegate.onexpansionChange.connect(self.expansion_clicked)
         button_delegate.oncheckboxstateChange.connect(self.checkboxstateChange)
         button_delegate.oneditorStarted.connect(self.update_vertical_header_arrow_and_editor)
@@ -851,7 +903,7 @@ class CustomTableView(QTableView):
         super(CustomTableView, self).resizeEvent(event)
 
     def horizontal_header_setup(self):
-        self.header = ButtonHeaderView(self)
+        self.header = ButtonHeaderView(self, self.expandable_rows)
         self.setHorizontalHeader(self.header)
 
         self.header.combofilteritemClicked.connect(self.onfilterChange)
@@ -867,9 +919,6 @@ class CustomTableView(QTableView):
         self.horizontalHeader().setMaximumHeight(18)
         self.horizontalHeader().setSectionsClickable(True)
         self.horizontalHeader().setDefaultAlignment(Qt.AlignLeft)
-
-        self.resizeColumnsToContents()
-        self.setColumnWidth(0, 20)
 
     def vertical_header_setup(self):
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
@@ -1360,13 +1409,15 @@ class ButtonHeaderView(QHeaderView):
     combofilteritemClicked = pyqtSignal(str, int, int, object)
     onupdateFooter = pyqtSignal()
 
-    def __init__(self, parent):
-        super().__init__(Qt.Horizontal, parent)  # Adjust orientation to Horizontal
+    def __init__(self, parent, expandable_rows):
+        super().__init__(Qt.Horizontal, parent=parent)  # Adjust orientation to Horizontal
 
         self.m_buttons = []
         # this dict is to attach an index value to each button for when sections are moved around by user
         # in order to properly rearrange the comboboxes... only way i could figure out how to do this, all other methods failed
         self.m_buttons_index_attachments = {}
+
+        self.expandable_rows = expandable_rows
 
         self.sectionResized.connect(self.adjustPositions)
         self.sectionMoved.connect(self.onSectionMovedChanged)
@@ -1396,11 +1447,15 @@ class ButtonHeaderView(QHeaderView):
         logical_index = self.logicalIndexAt(event.pos())
         visual_index = self.visualIndex(logical_index)
 
+        expansions = False
+        if logical_index == 0 and self.expandable_rows:
+            expansions = True
+
         # hide combo buttons if they aren't being hovered over or show if being hovered over (NOTE THIS IS FOR THE
         # COMBO ARROW not for the combobox popup
         for button in self.m_buttons:
             if self.m_buttons.index(button) == visual_index:
-                if logical_index != 0:
+                if not expansions:
                     button.show()
             else:
                 button.hide()
@@ -1635,6 +1690,7 @@ class LazyDataViewer(QMainWindow):
         # which columsn to have checkboxes in instead of text
         columns_with_checkboxes = [2, 3, 4, 5]
         sub_table_columns_with_checkboxes = [3]
+        expandable_rows = True
 
         # checkbox data for the columns with checkboxes (this would be replaced by grabbing data from say a sql table)
         # this is just a setup for grabbing "data" for testing purposes
@@ -1668,12 +1724,16 @@ class LazyDataViewer(QMainWindow):
         datetime_columns = [7]
 
         # custom qframe for tableview due to bug with widgets overlapping frame of tableview
+
+        #### NOTE DATETIME COLUMNS CANNOT ALSO BE IN EDITABLE COLUMNS ARGUMENT OR CAUSES CRASH #####
+        ### possible add a check to make sure editable columns, columns with checkboxes and datetime columns do not overlap
+        ### with same integer numbers
         self.frame = myframe()
-        self.model = LazyDataModel(data, columns_with_checkboxes, column_headers)
+        self.model = LazyDataModel(data, columns_with_checkboxes, column_headers, expandable_rows)
         self.table_view = CustomTableView(self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data,
                                           editable_columns=editable_columns, parent=self.frame, datetime_columns=datetime_columns,
                                           footer=True, footer_values=footer_values, subtable_col_checkboxes=sub_table_columns_with_checkboxes,
-                                          subtable_header_labels=sub_table_headers_labels)
+                                          subtable_header_labels=sub_table_headers_labels, expandable_rows=expandable_rows)
 
         self.mainbutton.clicked.connect(self.table_view.addMainRow)
         self.subbutton.clicked.connect(self.table_view.addSubRow)
