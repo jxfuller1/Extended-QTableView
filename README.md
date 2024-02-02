@@ -26,10 +26,11 @@ Features that this currently has as of 2/1/2024:
 Features left to finish:
 
 2) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked
-3) Cleaning up code so user can easily make the table and choose options
-4) Being able to add new rows on main table or sub-tables or delete rows  (partially done)
-5) add support for date datatype for the sub table widget as well
-6) Adding/Changing some visual aspects  -  (mostly done now)
+     a) this will require reworking the code a bit for changing checkbox states for the Qtableview based on TRUE/FALSE values from sql/dataframe table
+        on loadup of the qtableview, right now this is populated just with some random lists with integers to represent which rows to check
+4) Cleaning up code so user can easily make the table and choose options
+5) Being able to add new rows on main table or sub-tables or delete rows  (partially done)
+6) add support for date datatype for the sub table widget as well
 7) Add option to make changing data in row on main table via double clicking on row and having a popup appear instead of editing directly on cell(s)  (basically already do this for the subtable widgets)
 8) Add option to export table to excel
 
