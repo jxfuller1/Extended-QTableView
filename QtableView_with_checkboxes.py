@@ -405,7 +405,6 @@ class LazyDataModel(QAbstractTableModel):
         super().__init__()
 
         self.table_data = data
-        print(self.table_data)
         self.column_headers = column_headers
 
         self.checkbox_indexes = columns_with_checkboxes
@@ -579,6 +578,8 @@ class CustomTableView(QTableView):
             self.footer()
 
         self.display_filter_setup()
+
+        self.setAlternatingRowColors(True)
 
         self.resizeColumnsToContents()
         if self.expandable_rows:
@@ -1279,12 +1280,60 @@ class CustomTableView(QTableView):
         self.row_dialog.exec()
 
     def addMainRowUpdate(self, values: list):
-        print(values)
-        print(self.model.table_data)
         self.model.insertRow(values)
 
+        # last row number
+        row = self.model.rowCount()-1
+
+        # if there's checkboxes in table set checkstates for new row
+        if self.columns_with_checkboxes:
+            # get checkboxed rows from the delegate as i will need to add to this the new checkboxes that are checked
+            delegate = self.itemDelegate()
+            for col, rows in delegate.checked_indexes_rows.items():
+                if self.expandable_rows and "TRUE" in values[col-1].upper():
+                    if row not in rows:
+                        delegate.checked_indexes_rows[col].append(row)
+
+                elif not self.expandable_rows and "TRUE" in values[col].upper():
+                    if row not in rows:
+                        delegate.checked_indexes_rows[col].append(row)
+
     def addSubRow(self):
-        print('sub')
+
+        # get table
+        table = None
+        if self.selection_model.currentIndex().row() in self.sub_table_widgets:
+            widget = self.sub_table_widgets[self.selection_model.currentIndex().row()]
+            for child_widget in widget.findChildren(QWidget):
+                if isinstance(child_widget, QTableWidget):
+                    table = child_widget
+
+        if table:
+            header_labels = [table.horizontalHeaderItem(col).text() for col in range(table.columnCount())]
+            checkbox_columns = self.subtable_col_checkboxes
+            row_data = []
+            index = table.rowCount()
+
+            for col in range(table.columnCount()):
+                row_data.append("")
+
+            table.insertRow(index)
+            table.setRowHeight(index, 18)
+
+            # add checkboxes to new row
+            if self.subtable_col_checkboxes:
+                for i in self.subtable_col_checkboxes:
+                    checkbox = table.make_cell_checkbox()
+                    table.setCellWidget(index, i, checkbox)
+
+            self.dlg = sub_table_window(self, table, index, row_data, checkbox_columns, header_labels)
+            self.dlg.onsubtableChange.connect(self.addSubRowUpdate)
+            self.dlg.exec()
+
+    def addSubRowUpdate(self, table: QTableWidget, row: int, row_values: list):
+        print(table)
+        print(row)
+        print(row_values)
 
 
 # for sub_table widget
