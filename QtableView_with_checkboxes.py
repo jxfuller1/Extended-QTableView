@@ -405,10 +405,16 @@ class LazyDataModel(QAbstractTableModel):
         super().__init__()
 
         self.table_data = data
+        print(self.table_data)
         self.column_headers = column_headers
+
         self.checkbox_indexes = columns_with_checkboxes
         self.row_clicked = -1
         self.expandable_rows = expandable_rows
+
+        # add header for column expansion if expandable rows added to table
+        if self.expandable_rows:
+            self.column_headers.insert(0, "")
 
         self.font = QFont()
         self.font.setBold(True)
@@ -418,7 +424,11 @@ class LazyDataModel(QAbstractTableModel):
         return len(self.table_data)
 
     def columnCount(self, parent=None):
-        return len(self.table_data[0])
+        if self.expandable_rows:
+            total = len(self.table_data[0])+1
+            return total
+        else:
+            return len(self.table_data[0])
 
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and index.column() >= 0 and index.column() not in self.checkbox_indexes:
@@ -476,6 +486,11 @@ class LazyDataModel(QAbstractTableModel):
                 return True
             return False
         return False
+
+    def insertRow(self, data):
+        self.beginInsertRows(self.index(len(self.table_data), 0), len(self.table_data), len(self.table_data))
+        self.table_data.append(data)
+        self.endInsertRows()
 
 
 class CustomTableView(QTableView):
@@ -568,7 +583,7 @@ class CustomTableView(QTableView):
         self.resizeColumnsToContents()
         if self.expandable_rows:
             self.setColumnWidth(0, 20)
-    
+
     # a print check to see whether columns integers picked for these arguments passed are the same, AS THIS WILL CAUSE A CRASH
     def column_arguments_same(self):
         # check to make sure these 3 arguments do not contain the same column numbers, print error if so, because
@@ -585,11 +600,11 @@ class CustomTableView(QTableView):
         if self.datetime_columns and self.columns_with_checkboxes:
             common_elements_check3 = set(self.datetime_columns) & set(self.columns_with_checkboxes)
             if common_elements_check3:
-                error = True 
-        
+                error = True
+
         if error:
             print("ERROR, Cannot have same columns for editable columns, columns with checkboxes or datetime columns, THIS WILL CAUSE A CRASH")
-        
+
     def footer(self):
         self.footer_widget = QWidget(self)
         stylesheet = "background-color: lightgrey;"
@@ -1255,7 +1270,18 @@ class CustomTableView(QTableView):
        # print("Cell clicked at row:", index.row(), "column:", index.column())
 
     def addMainRow(self):
-        print("test")
+        header_labels = []
+        for i in range(self.model.columnCount()):
+            header_labels.append(self.model.headerData(i, Qt.Horizontal, Qt.DisplayRole))
+
+        self.row_dialog = addRowMaintable_window(self, self.model.columnCount(), self.columns_with_checkboxes, self.datetime_columns, self.expandable_rows, header_labels)
+        self.row_dialog.onaddRowChanged.connect(self.addMainRowUpdate)
+        self.row_dialog.exec()
+
+    def addMainRowUpdate(self, values: list):
+        print(values)
+        print(self.model.table_data)
+        self.model.insertRow(values)
 
     def addSubRow(self):
         print('sub')
@@ -1866,8 +1892,7 @@ class sub_table_window(QDialog):
         self.setWindowTitle("Change sub-table data?")
         self.setStyleSheet("QDialog {background-color: lightgrey;}")
 
-        self.line_edits = []
-        self.checkboxes = []
+        self.widgets = []
 
         QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
         self.buttonBox = QDialogButtonBox(QBtn)
@@ -1890,7 +1915,7 @@ class sub_table_window(QDialog):
                 line_edit = QLineEdit()
                 line_edit.setText(value)
 
-                self.line_edits.append(line_edit)
+                self.widgets.append(line_edit)
                 edit_layout.addWidget(label)
                 edit_layout.addWidget(line_edit)
 
@@ -1901,7 +1926,7 @@ class sub_table_window(QDialog):
                # self.layout.addSpacing(20)
             elif index in self.checkbox_columns:
                 check = QCheckBox(self.header_labels[index])
-                self.checkboxes.append(check)
+                self.widgets.append(check)
 
                 if value.upper() == "TRUE" or value.upper() == "T":
                     check.setCheckState(Qt.Checked)
@@ -1911,7 +1936,7 @@ class sub_table_window(QDialog):
                 self.layout.addWidget(check, alignment=Qt.AlignHCenter)
                # self.layout.addSpacing(20)
 
-        self.layout.addWidget(self.buttonBox)
+        self.layout.addWidget(self.buttonBox, alignment=Qt.AlignHCenter)
         self.setLayout(self.layout)
 
     def accept_changes(self):
@@ -1922,14 +1947,118 @@ class sub_table_window(QDialog):
         self.close()
 
     def find_layout_children(self) -> List[str]:
-        widget_text = []
+        row_data = []
 
-        for i in self.line_edits:
-            widget_text.append(i.text())
-        for i in self.checkboxes:
-            widget_text.append(str(i.isChecked()))
+        for widget in self.widgets:
+            if isinstance(widget, QCheckBox):
+                row_data.append(str(widget.isChecked()))
+            else:
+                if isinstance(widget, QLineEdit):
+                    row_data.append(widget.text())
 
-        return widget_text
+        return row_data
+
+
+# create a Qdialog for the user to insert data for the new row to be added
+class addRowMaintable_window(QDialog):
+    onaddRowChanged = pyqtSignal(list)
+
+    def __init__(self, parent, total_columns, columns_with_checkboxes, datetime_columns, expandable_rows, header_labels):
+        super(QDialog, self).__init__(parent)
+
+        self.columns = total_columns
+        self.checkbox_columns = columns_with_checkboxes
+        self.datetime_columns = datetime_columns
+        self.expandable_rows = expandable_rows
+        self.header_labels = header_labels
+
+        self.initUI()
+
+    def initUI(self):
+        self.widgets = []
+
+        self.setWindowTitle("Add Row")
+        self.setStyleSheet("QDialog {background-color: lightgrey;}")
+
+        QBtn = QDialogButtonBox.Ok | QDialogButtonBox.Cancel
+        self.buttonBox = QDialogButtonBox(QBtn)
+
+        self.buttonBox.accepted.connect(self.accept_changes)
+        self.buttonBox.rejected.connect(self.reject)
+
+        upper_layout = QVBoxLayout()
+
+        upper_label = QLabel("<b>Enter row data to add</b>")
+        upper_label.setAlignment(Qt.AlignHCenter)
+
+        upper_layout.addWidget(upper_label)
+        upper_layout.addSpacing(30)
+
+        for col in range(self.columns):
+            if self.expandable_rows and col == 0:
+                pass
+            else:
+                if self.datetime_columns and col in self.datetime_columns:
+                    layout = QHBoxLayout()
+                    label = QLabel(self.header_labels[col])
+
+                    date = QDateEdit()
+                    date.setCalendarPopup(True)
+                    date.setDate(QDate.currentDate())
+                    self.widgets.append(date)
+
+                    layout.addStretch()
+                    layout.addWidget(label)
+                    layout.addWidget(date)
+                    layout.addStretch()
+
+                    upper_layout.addLayout(layout)
+
+                elif self.checkbox_columns and col in self.checkbox_columns:
+                    checkbox = QCheckBox(self.header_labels[col])
+                    self.widgets.append(checkbox)
+
+                    upper_layout.addWidget(checkbox, alignment=Qt.AlignHCenter)
+
+                else:
+                    layout = QHBoxLayout()
+                    label = QLabel(self.header_labels[col])
+                    edit = QLineEdit()
+                    self.widgets.append(edit)
+
+                    layout.addWidget(label)
+                    layout.addWidget(edit)
+
+                    upper_layout.addLayout(layout)
+
+        upper_layout.addStretch()
+        upper_layout.addWidget(self.buttonBox, alignment=Qt.AlignHCenter)
+        self.setLayout(upper_layout)
+
+    def accept_changes(self):
+        row_values = self.find_layout_children()
+
+        self.onaddRowChanged.emit(row_values)
+
+        self.close()
+
+    def find_layout_children(self) -> List[str]:
+        row_data = []
+
+        for widget in self.widgets:
+            if isinstance(widget, QDateEdit):
+                selected_date = widget.date()
+                date_string = selected_date.toString("MM/dd/yyyy")
+                row_data.append(date_string)
+
+            elif isinstance(widget, QCheckBox):
+                row_data.append(str(widget.isChecked()))
+
+            else:
+                if isinstance(widget, QLineEdit):
+                    row_data.append(widget.text())
+
+        return row_data
 
 
 if __name__ == "__main__":
