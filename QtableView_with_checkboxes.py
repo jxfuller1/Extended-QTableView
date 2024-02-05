@@ -10,7 +10,8 @@ from PyQt5.QtGui import QColor, QPen, QFont, QStandardItemModel, QWheelEvent, QM
 from PyQt5.QtWidgets import QApplication, QTableView, QVBoxLayout, QMainWindow, QAbstractItemView, \
     QAbstractItemDelegate, QStyledItemDelegate, QPushButton, QWidget, QItemDelegate, QStyleOptionButton, QStyle, \
     QTableWidget, QHeaderView, QLabel, QLineEdit, QDialogButtonBox, QDialog, QTableWidgetItem, QComboBox, QFrame, \
-    QCheckBox, QStyleOptionViewItem, QScrollBar, QHBoxLayout, QSizePolicy, QSpacerItem, QCalendarWidget, QDateEdit
+    QCheckBox, QStyleOptionViewItem, QScrollBar, QHBoxLayout, QSizePolicy, QSpacerItem, QCalendarWidget, QDateEdit, \
+    QMenu, QAction
 from PyQt5.QtCore import Qt, QAbstractTableModel, QEvent, QVariant, QSize, QRect, QModelIndex, pyqtSignal, \
     QSortFilterProxyModel, QPoint, pyqtSlot, QCoreApplication, QTimer, QLocale, QItemSelectionModel, QDate
 
@@ -453,6 +454,7 @@ class LazyDataModel(QAbstractTableModel):
 
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
             return self.column_headers[section]
+
         return None
 
     # update orws that have been extended
@@ -566,6 +568,10 @@ class CustomTableView(QTableView):
         self.horizontalScrollBar().rangeChanged.connect(self.update_sub_table_positions_timer)
         self.horizontalHeader().sectionResized.connect(self.update_sub_table_positions_timer)
 
+        vheader = self.verticalHeader()
+        vheader.setContextMenuPolicy(Qt.CustomContextMenu)
+        vheader.customContextMenuRequested.connect(self.show_context_menu)
+
         # Apply styles directly to QTableView
         # Apply style to hide the frame
         self.setObjectName("tableview")
@@ -584,6 +590,20 @@ class CustomTableView(QTableView):
         self.resizeColumnsToContents()
         if self.expandable_rows:
             self.setColumnWidth(0, 20)
+
+    def show_context_menu(self, position):
+        vertical_header = self.verticalHeader()
+        index = vertical_header.logicalIndexAt(position)
+
+        if index != -1:
+            menu = QMenu(self)
+
+            # Add actions or other menu items as needed
+            action = QAction("Item at index {} clicked!".format(index), self)
+            menu.addAction(action)
+
+            # Show the context menu at the specified position
+            menu.exec_(self.mapToGlobal(position))
 
     # a print check to see whether columns integers picked for these arguments passed are the same, AS THIS WILL CAUSE A CRASH
     def column_arguments_same(self):
@@ -1191,7 +1211,12 @@ class CustomTableView(QTableView):
 
         # Find row index (based on key value in the dictionary that im storing the opened table widgets in)
         table_row = [key for key, value in self.sub_table_widgets.items() if value == table.parent()]
-        self.sub_table_data[table_row[0]][row] = row_data
+
+        if len(self.sub_table_data[table_row[0]]) <= row:
+            # append if new row
+            self.sub_table_data[table_row[0]].append(row_data)
+        else:
+            self.sub_table_data[table_row[0]][row] = row_data
 
     def sub_table_populate(self, sub_table_index: int, widget: QWidget):
         table = None
@@ -1300,10 +1325,16 @@ class CustomTableView(QTableView):
 
     def addSubRow(self):
 
+        # get row with the arrow in the vertical header to indicated which row is selected
+        row_selected = -1
+        for i in range(self.model.rowCount()):
+            if "\u27A1" in self.model.headerData(i, Qt.Vertical, Qt.DisplayRole):
+                row_selected = i
+
         # get table
         table = None
-        if self.selection_model.currentIndex().row() in self.sub_table_widgets:
-            widget = self.sub_table_widgets[self.selection_model.currentIndex().row()]
+        if row_selected in self.sub_table_widgets:
+            widget = self.sub_table_widgets[row_selected]
             for child_widget in widget.findChildren(QWidget):
                 if isinstance(child_widget, QTableWidget):
                     table = child_widget
@@ -1327,13 +1358,15 @@ class CustomTableView(QTableView):
                     table.setCellWidget(index, i, checkbox)
 
             self.dlg = sub_table_window(self, table, index, row_data, checkbox_columns, header_labels)
-            self.dlg.onsubtableChange.connect(self.addSubRowUpdate)
+            self.dlg.onsubtableChange.connect(table.sub_table_adjust)
             self.dlg.exec()
 
-    def addSubRowUpdate(self, table: QTableWidget, row: int, row_values: list):
-        print(table)
-        print(row)
-        print(row_values)
+            # fix row height in main table
+            height = self.get_sub_table_Height(table.parent())
+
+            # map to proxy index
+            index = self.indexFromSourcetoProxy(row_selected, 0)
+            self.setRowHeight(index.row(), height+15)
 
 
 # for sub_table widget
@@ -1870,6 +1903,7 @@ class sub_TableWidget(QTableWidget):
         self.dlg.exec()
 
     def sub_table_adjust(self, table: QTableWidget, row: int, row_data: List[str]):
+
         for col in range(table.columnCount()):
             # check if cell widget
             widget = self.cellWidget(row, col)
