@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import QApplication, QTableView, QVBoxLayout, QMainWindow, 
     QAbstractItemDelegate, QStyledItemDelegate, QPushButton, QWidget, QItemDelegate, QStyleOptionButton, QStyle, \
     QTableWidget, QHeaderView, QLabel, QLineEdit, QDialogButtonBox, QDialog, QTableWidgetItem, QComboBox, QFrame, \
     QCheckBox, QStyleOptionViewItem, QScrollBar, QHBoxLayout, QSizePolicy, QSpacerItem, QCalendarWidget, QDateEdit, \
-    QMenu, QAction
+    QMenu, QAction, QMessageBox
 from PyQt5.QtCore import Qt, QAbstractTableModel, QEvent, QVariant, QSize, QRect, QModelIndex, pyqtSignal, \
     QSortFilterProxyModel, QPoint, pyqtSlot, QCoreApplication, QTimer, QLocale, QItemSelectionModel, QDate
 
@@ -595,12 +595,19 @@ class CustomTableView(QTableView):
         vertical_header = self.verticalHeader()
         index = vertical_header.logicalIndexAt(position)
 
+        # update selected row on right click of header in table
+        self.update_row_selection(index)
+
         if index != -1:
             menu = QMenu(self)
 
             # Add actions or other menu items as needed
-            action = QAction("Item at index {} clicked!".format(index), self)
-            menu.addAction(action)
+            delete = QAction(f"Delete Current Row", self)
+            delete.triggered.connect(lambda: self.delMainRowMsg(index))
+            add = QAction(f"Add New Row", self)
+            add.triggered.connect(lambda: self.addMainRowMsg(index))
+            menu.addAction(delete)
+            menu.addAction(add)
 
             # Show the context menu at the specified position
             menu.exec_(self.mapToGlobal(position))
@@ -1295,6 +1302,36 @@ class CustomTableView(QTableView):
         # Handle cell clicked event here
        # print("Cell clicked at row:", index.row(), "column:", index.column())
 
+    def delMainRowMsg(self, row: int):
+        reply = QMessageBox.question(self, 'Delete Row', 'Delete current row selected?',
+                                     QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel)
+
+        if reply == QMessageBox.Ok:
+            self.delMainRow(row)
+        else:
+            pass
+
+    def delMainRow(self, row: int):
+        print(row)
+        # things to modify on row deletion
+        # will need to activate to function in abstract table model to delete the row data
+        # will need to update remove row checkmarks from the delegate if any
+        # update filter comboboxes?
+
+
+        # EDIT NEED TO UPDATE FILTER COMBOBOXES WHEN ADDING ROW TOO
+        # UPDATE FOOTER ROW AS WELL WHEN ADDING ROW
+
+    def addMainRowMsg(self, row: int):
+        reply = QMessageBox.question(self, 'Add Row', 'Add new row to end of table?',
+                                     QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel)
+
+        if reply == QMessageBox.Ok:
+            self.verticalScrollBar().setValue(self.verticalScrollBar().maximum())
+            self.addMainRow()
+        else:
+            pass
+
     def addMainRow(self):
         header_labels = []
         for i in range(self.model.columnCount()):
@@ -1307,7 +1344,7 @@ class CustomTableView(QTableView):
     def addMainRowUpdate(self, values: list):
         self.model.insertRow(values)
 
-        # last row number
+        # add row to end of table
         row = self.model.rowCount()-1
 
         # if there's checkboxes in table set checkstates for new row
