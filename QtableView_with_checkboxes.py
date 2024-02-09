@@ -493,6 +493,11 @@ class LazyDataModel(QAbstractTableModel):
         self.table_data.append(data)
         self.endInsertRows()
 
+    def removeRow(self, row, parent=QModelIndex()):
+        self.beginRemoveRows(parent, row, row)
+        del self.table_data[row]
+        self.endRemoveRows()
+        return True
 
 class CustomTableView(QTableView):
     def __init__(self, model, columns_with_checkboxes: List[int] = None, checked_indexes_rows: Dict[int, List[int]] = None,
@@ -886,7 +891,7 @@ class CustomTableView(QTableView):
             self.set_current_editor.setSelection(0, len(self.search_text))
 
     # update combobox filters on data changed and footer value
-    def model_data_changed(self, index_top_left, index_bottom_right, roles):
+    def model_data_changed(self, index_top_left, index_bottom_right: QModelIndex = None, roles=None):
 
         # update footer value
         if self.footer_show:
@@ -1234,7 +1239,8 @@ class CustomTableView(QTableView):
 
         if table is not None and self.sub_table_data[sub_table_index] is not None:
             rows = len(self.sub_table_data[sub_table_index])
-            columns = len(self.sub_table_data[sub_table_index][0])
+            # columns = len(self.sub_table_data[sub_table_index][0])
+            columns = len(self.subtable_header_labels)
 
             table.setRowCount(rows)
             table.setColumnCount(columns)
@@ -1312,15 +1318,50 @@ class CustomTableView(QTableView):
             pass
 
     def delMainRow(self, row: int):
-        print(row)
+        index = self.indexFromProxytoSource(row, 0)
+
+        self.model.removeRow(index.row())
+
+        # update checkbox rows when 1 is deleted for the delegate
+        if self.columns_with_checkboxes:
+            delegate = self.itemDelegate()
+            for col, rows in delegate.checked_indexes_rows.items():
+                if index.row() in rows:
+                    rows.remove(index.row())
+
+                # update row indexes
+                updated_rows = [x-1 if x > index.row() else x for x in rows]
+                delegate.checked_indexes_rows[col] = updated_rows
+
+        # reset footer values
+        columns = self.model.columnCount()
+        if self.footer_show:
+            for col in range(columns):
+                self.setFooterValue(col)
+
+        # repopulate filter dropdowns
+        self.header.populate_filter_dropdown()
+
+        # update any sub table widgets on screen
+        if self.expandable_rows:
+            if index.row() in self.sub_table_widgets:
+                widget = self.sub_table_widgets[index.row()]
+                widget.deleteLater()
+                del self.sub_table_widgets[index.row()]
+
+            # -1 to update to correct row
+            keys_to_update = [key for key in self.sub_table_widgets.keys() if key > index.row()]
+
+            for key in keys_to_update:
+                new_key = key - 1
+                self.sub_table_widgets[new_key] = self.sub_table_widgets[key]
+                del self.sub_table_widgets[key]
+
+        # update table positions if any on screen
+        self.update_sub_table_positions_timer()
+
         # things to modify on row deletion
-        # will need to activate to function in abstract table model to delete the row data
-        # will need to update remove row checkmarks from the delegate if any
-        # update filter comboboxes?
-
-
-        # EDIT NEED TO UPDATE FILTER COMBOBOXES WHEN ADDING ROW TOO
-        # UPDATE FOOTER ROW AS WELL WHEN ADDING ROW
+        # update subtable widgets variables!
 
     def addMainRowMsg(self, row: int):
         reply = QMessageBox.question(self, 'Add Row', 'Add new row to end of table?',
@@ -1359,6 +1400,20 @@ class CustomTableView(QTableView):
                 elif not self.expandable_rows and "TRUE" in values[col].upper():
                     if row not in rows:
                         delegate.checked_indexes_rows[col].append(row)
+
+        # update footer and filter comboboxes
+        columns = self.model.columnCount()
+
+        for col in range(columns):
+            index = self.model.index(row, col)
+            self.model_data_changed(index)
+
+        # add to sub_table_data
+        if self.expandable_rows:
+            self.sub_table_data.append([])
+
+        # update positions of tables if any on screen
+        self.update_sub_table_positions_timer()
 
     def addSubRow(self):
 
