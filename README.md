@@ -8,31 +8,31 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-Features that this currently has as of 2/7/2024:
+Features that this currently has as of 2/11/2024:
 
 1) Sorting
 2) Column Sections are movable
 3) Filtering w/ Comboboxes at the headers
-4) Expansion of rows that to display sub-tablewidgets to give additional information for each row
+4) Expansion of rows that display sub-tablewidgets to give additional information for each row
 5) Checkboxes in columns for main table and sub-table widgets
 6) Setting which columns you want to be editable
 7) Being able to edit cell data
 8) Filter combobox options update dynamically as cell data is changed
-9) In-column search   (as you type in a cell it will search the column and highlight the matching string typed)
+9) In-column searching   (as you type in a cell it will search the column and highlight the matching string typed)
 10) Optionable Footer Row
 11) Current Filters applied will show up below footer
 12) Date column datatype added that allows you to change the date with a Calendar popup
+13) Optional add/remove rows in main table and sub-tables by right clicking vertical headers
 
 Features left to finish:
 
-2) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked
+1) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked
      a) this will require reworking the code a bit for changing checkbox states for the Qtableview based on TRUE/FALSE values from sql/dataframe table
         on loadup of the qtableview, right now this is populated just with some random lists with integers to represent which rows to check
-4) Cleaning up code so user can easily make the table and choose options
-5) Being able to add new rows on main table or sub-tables or delete rows  (partially done)
-6) add support for date datatype for the sub table widget as well
-7) Add option to make changing data in row on main table via double clicking on row and having a popup appear instead of editing directly on cell(s)  (basically already do this for the subtable widgets)
-8) Add option to export table to excel
+2) Cleaning up code so user can easily make the table and choose options
+3) add support for date datatype for the sub table widget as well
+4) Add option to make changing data in row on main table via double clicking on row and having a popup appear instead of editing directly on cell(s)  (basically already do this for the subtable widgets)
+5) Add option to export table to excel
 
 Header drop down filters and sub-tables for each row:
 ![1](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/bcf1022e-7328-452f-9bd5-bb75ba64a500)
