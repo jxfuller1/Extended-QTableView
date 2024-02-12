@@ -499,11 +499,14 @@ class LazyDataModel(QAbstractTableModel):
         self.endRemoveRows()
         return True
 
+
 class CustomTableView(QTableView):
     def __init__(self, model, columns_with_checkboxes: List[int] = None, checked_indexes_rows: Dict[int, List[int]] = None,
                  sub_table_data: List[List[str]] = None, editable_columns: List[int] = None, parent=None,
                  datetime_columns: List[int] = None, footer: bool = False, footer_values: dict = None,
-                 subtable_col_checkboxes: List[int] = None, subtable_header_labels: List[str] = None, expandable_rows: bool = True):
+                 subtable_col_checkboxes: List[int] = None, subtable_header_labels: List[str] = None, expandable_rows: bool = True,
+                 add_mainrow_option: bool = False, del_mainrow_option: bool = False, add_subrow_option: bool = False,
+                 del_subrow_option: bool = False, subtable_datetime_columns: List[int] = None):
 
         super().__init__(parent)
         # parent being a qframe
@@ -521,6 +524,11 @@ class CustomTableView(QTableView):
         self.subtable_col_checkboxes = subtable_col_checkboxes
         self.subtable_header_labels = subtable_header_labels
         self.expandable_rows = expandable_rows
+        self.add_mainrow_option = add_mainrow_option
+        self.del_mainrow_option = del_mainrow_option
+        self.add_subrow_option = add_subrow_option
+        self.del_subrow_option = del_subrow_option
+        self.subtable_datetime_columns = subtable_datetime_columns
 
         self.footer_show = footer
         self.footer_row_boxes = []
@@ -573,9 +581,10 @@ class CustomTableView(QTableView):
         self.horizontalScrollBar().rangeChanged.connect(self.update_sub_table_positions_timer)
         self.horizontalHeader().sectionResized.connect(self.update_sub_table_positions_timer)
 
-        vheader = self.verticalHeader()
-        vheader.setContextMenuPolicy(Qt.CustomContextMenu)
-        vheader.customContextMenuRequested.connect(self.show_context_menu)
+        if self.add_mainrow_option or self.del_mainrow_option:
+            vheader = self.verticalHeader()
+            vheader.setContextMenuPolicy(Qt.CustomContextMenu)
+            vheader.customContextMenuRequested.connect(self.show_context_menu)
 
         # Apply styles directly to QTableView
         # Apply style to hide the frame
@@ -607,12 +616,14 @@ class CustomTableView(QTableView):
             menu = QMenu(self)
 
             # Add actions or other menu items as needed
-            delete = QAction(f"Delete Current Row", self)
-            delete.triggered.connect(lambda: self.delMainRowMsg(index))
-            add = QAction(f"Add New Row", self)
-            add.triggered.connect(lambda: self.addMainRowMsg(index))
-            menu.addAction(delete)
-            menu.addAction(add)
+            if self.del_mainrow_option:
+                delete = QAction(f"Delete Current Row", self)
+                delete.triggered.connect(lambda: self.delMainRowMsg(index))
+                menu.addAction(delete)
+            if self.add_mainrow_option:
+                add = QAction(f"Add New Row", self)
+                add.triggered.connect(lambda: self.addMainRowMsg(index))
+                menu.addAction(add)
 
             # Show the context menu at the specified position
             menu.exec_(self.mapToGlobal(position))
@@ -1211,8 +1222,10 @@ class CustomTableView(QTableView):
         upper_widget.setContentsMargins(30, 0, 0, 0)
         upper_layout = QVBoxLayout()
         upper_layout.setContentsMargins(0, 0, 0, 10)
-        sub_table = sub_TableWidget()
+        sub_table = sub_TableWidget(self.add_subrow_option, self.del_subrow_option)
         sub_table.rowdataChanged.connect(self.sub_table_items_changed)
+        sub_table.onAddRowChanged.connect(self.addSubRow)
+        sub_table.onDelRowChanged.connect(self.delSubRow)
 
         upper_layout.addWidget(sub_table)
         upper_widget.setLayout(upper_layout)
@@ -1322,9 +1335,11 @@ class CustomTableView(QTableView):
 
         self.model.removeRow(index.row())
 
-        # update checkbox rows when 1 is deleted for the delegate
+        # update checkbox rows when 1 is deleted for the delegate and updated expanded_rows columns if any rows are expanded
         if self.columns_with_checkboxes:
             delegate = self.itemDelegate()
+
+            # update check_indexes var in delegate
             for col, rows in delegate.checked_indexes_rows.items():
                 if index.row() in rows:
                     rows.remove(index.row())
@@ -1332,6 +1347,13 @@ class CustomTableView(QTableView):
                 # update row indexes
                 updated_rows = [x-1 if x > index.row() else x for x in rows]
                 delegate.checked_indexes_rows[col] = updated_rows
+
+            # update expanded_row var in delegate
+            if index.row() in delegate.expanded_rows:
+                delegate.expanded_rows.remove(index.row())
+
+            updated_rows = [x-1 if x > index.row() else x for x in delegate.expanded_rows]
+            delegate.expanded_rows = updated_rows
 
         # reset footer values
         columns = self.model.columnCount()
@@ -1342,6 +1364,9 @@ class CustomTableView(QTableView):
         # repopulate filter dropdowns
         self.header.populate_filter_dropdown()
 
+        # delete the corresponding sub-table data that is no longer needed for the main table row
+        del self.sub_table_data[row]
+
         # update any sub table widgets on screen
         if self.expandable_rows:
             if index.row() in self.sub_table_widgets:
@@ -1349,8 +1374,9 @@ class CustomTableView(QTableView):
                 widget.deleteLater()
                 del self.sub_table_widgets[index.row()]
 
-            # -1 to update to correct row
             keys_to_update = [key for key in self.sub_table_widgets.keys() if key > index.row()]
+            # sort first otherwise the following for loop wont' work correctly
+            keys_to_update.sort()
 
             for key in keys_to_update:
                 new_key = key - 1
@@ -1359,9 +1385,6 @@ class CustomTableView(QTableView):
 
         # update table positions if any on screen
         self.update_sub_table_positions_timer()
-
-        # things to modify on row deletion
-        # update subtable widgets variables!
 
     def addMainRowMsg(self, row: int):
         reply = QMessageBox.question(self, 'Add Row', 'Add new row to end of table?',
@@ -1415,21 +1438,25 @@ class CustomTableView(QTableView):
         # update positions of tables if any on screen
         self.update_sub_table_positions_timer()
 
-    def addSubRow(self):
-
-        # get row with the arrow in the vertical header to indicated which row is selected
+    def addSubRow(self, table: QTableWidget = None):
+        # get row with the subtable widget
         row_selected = -1
-        for i in range(self.model.rowCount()):
-            if "\u27A1" in self.model.headerData(i, Qt.Vertical, Qt.DisplayRole):
-                row_selected = i
+        widget = table.parent()
+        for key, value in self.sub_table_widgets.items():
+            if value == widget:
+                row_selected = key
+
+        # for i in range(self.model.rowCount()):
+        #     if "\u27A1" in self.model.headerData(i, Qt.Vertical, Qt.DisplayRole):
+        #         row_selected = i
 
         # get table
-        table = None
-        if row_selected in self.sub_table_widgets:
-            widget = self.sub_table_widgets[row_selected]
-            for child_widget in widget.findChildren(QWidget):
-                if isinstance(child_widget, QTableWidget):
-                    table = child_widget
+        # table = None
+        # if row_selected in self.sub_table_widgets:
+        #     widget = self.sub_table_widgets[row_selected]
+        #     for child_widget in widget.findChildren(QWidget):
+        #         if isinstance(child_widget, QTableWidget):
+        #             table = child_widget
 
         if table:
             header_labels = [table.horizontalHeaderItem(col).text() for col in range(table.columnCount())]
@@ -1459,6 +1486,26 @@ class CustomTableView(QTableView):
             # map to proxy index
             index = self.indexFromSourcetoProxy(row_selected, 0)
             self.setRowHeight(index.row(), height+15)
+
+    def delSubRow(self, table: QTableWidget, row: int):
+        table.removeRow(row)
+
+        # get row with the subtable widget
+        row_selected = -1
+        widget = table.parent()
+        for key, value in self.sub_table_widgets.items():
+            if value == widget:
+                row_selected = key
+
+        # remove row from sub_table data
+        del self.sub_table_data[row_selected][row]
+
+        # fix row height in main table
+        height = self.get_sub_table_Height(table.parent())
+
+        # map to proxy index and set row height
+        index = self.indexFromSourcetoProxy(row_selected, 0)
+        self.setRowHeight(index.row(), height+15)
 
 
 # for sub_table widget
@@ -1852,12 +1899,10 @@ class LazyDataViewer(QMainWindow):
         self.main_horizontal = QHBoxLayout()
         self.sql_combo = QComboBox()
         self.sql_combo.addItem("For SQL tables to be added")
-        self.mainbutton = QPushButton("Add Row Main Table")
-        self.subbutton = QPushButton("Add Row Sub Table")
 
+        self.main_horizontal.addStretch()
         self.main_horizontal.addWidget(self.sql_combo)
-        self.main_horizontal.addWidget(self.mainbutton)
-        self.main_horizontal.addWidget(self.subbutton)
+        self.main_horizontal.addStretch()
 
         self.main_layout.addLayout(self.main_horizontal)
         self.main_widget.setLayout(self.main_layout)
@@ -1905,11 +1950,15 @@ class LazyDataViewer(QMainWindow):
             table_data = []
             for row in range(3):
                 row_data = []
-                for col in range(4):
-                    if col < 3:
+                for col in range(5):
+                    if col < 2:
                         row_data.append(f'sub Row {row}, sub Col {col}')
+                    if col == 2:
+                        row_data.append("01/11/2024")
                     if col == 3:
                         row_data.append("True")
+                    if col == 4:
+                        row_data.append(f'sub Row {row}, sub Col {col}')
                 table_data.append(row_data)
             sub_table_data.append(table_data)
 
@@ -1917,7 +1966,7 @@ class LazyDataViewer(QMainWindow):
         for i in range(columns):
             column_headers.append(f"Column {i}")
 
-        sub_table_headers_labels = ["NCR No.", "Disposition", "Extra", "Completed"]
+        sub_table_headers_labels = ["NCR No.", "Disposition", "Date", "Extra", "Completed"]
 
         footer_values = {1: "total", 4: "total", 6: "sum"}
 
@@ -1933,10 +1982,9 @@ class LazyDataViewer(QMainWindow):
         self.table_view = CustomTableView(self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data,
                                           editable_columns=editable_columns, parent=self.frame, datetime_columns=datetime_columns,
                                           footer=True, footer_values=footer_values, subtable_col_checkboxes=sub_table_columns_with_checkboxes,
-                                          subtable_header_labels=sub_table_headers_labels, expandable_rows=expandable_rows)
-
-        self.mainbutton.clicked.connect(self.table_view.addMainRow)
-        self.subbutton.clicked.connect(self.table_view.addSubRow)
+                                          subtable_header_labels=sub_table_headers_labels, expandable_rows=expandable_rows,
+                                          add_mainrow_option=True, del_mainrow_option=True, add_subrow_option=True, del_subrow_option=True,
+                                          subtable_datetime_columns=[2])
 
         self.main_layout.addWidget(self.frame)
 
@@ -1948,9 +1996,14 @@ class LazyDataViewer(QMainWindow):
 
 class sub_TableWidget(QTableWidget):
     rowdataChanged = pyqtSignal(int, list, object)
+    onAddRowChanged = pyqtSignal(object)
+    onDelRowChanged = pyqtSignal(object, int)
 
-    def __init__(self):
+    def __init__(self, add_subrow_option, del_subrow_option):
         super(sub_TableWidget, self).__init__()
+
+        self.add_subrow_option = add_subrow_option
+        self.del_subrow_option = del_subrow_option
 
       #  self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.setAlternatingRowColors(True)
@@ -1963,8 +2016,36 @@ class sub_TableWidget(QTableWidget):
 
         self.horizontalHeader().setSectionsClickable(False)
 
+        if self.add_subrow_option or self.del_subrow_option:
+            vheader = self.verticalHeader()
+            vheader.setContextMenuPolicy(Qt.CustomContextMenu)
+            vheader.customContextMenuRequested.connect(self.show_context_menu)
+
        # new_table.horizontalHeader().setVisible(False)
        # new_table.verticalHeader().setVisible(False)
+
+    def show_context_menu(self, position):
+        vertical_header = self.verticalHeader()
+        index = vertical_header.logicalIndexAt(position)
+
+        self.clearSelection()
+        self.selectRow(index)
+
+        if index != -1:
+            menu = QMenu(self)
+
+            # Add actions or other menu items as needed
+            if self.del_subrow_option:
+                delete = QAction(f"Delete Current SubTable Row", self)
+                delete.triggered.connect(lambda: self.subDelRow(index))
+                menu.addAction(delete)
+            if self.add_subrow_option:
+                add = QAction(f"Add New SubTable Row", self)
+                add.triggered.connect(self.subAddRow)
+                menu.addAction(add)
+
+            # Show the context menu at the specified position
+            menu.exec_(self.mapToGlobal(position))
 
     def sub_table_clicked(self, index):
         sender = self.sender()
@@ -2046,6 +2127,24 @@ class sub_TableWidget(QTableWidget):
 
         #  print(widget)
         #  print(row, col)
+
+    def subAddRow(self):
+        reply = QMessageBox.question(self, 'Add Row', 'Add new row to end of sub-table?',
+                                     QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel)
+
+        if reply == QMessageBox.Ok:
+            self.onAddRowChanged.emit(self)
+        else:
+            pass
+
+    def subDelRow(self, index: int):
+        reply = QMessageBox.question(self, 'Delete Row', 'Delete current row selected in sub-table?',
+                                     QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel)
+
+        if reply == QMessageBox.Ok:
+            self.onDelRowChanged.emit(self, index)
+        else:
+            pass
 
 
 # for changes values in the sub_table
