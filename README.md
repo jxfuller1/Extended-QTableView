@@ -21,9 +21,8 @@ Features that this currently has as of 2/12/2024:
 9) In-column searching   (as you type in a cell it will search the column and highlight the matching string typed)
 10) Optionable Footer Row
 11) Current Filters applied will show up below footer
-12) Date column datatype added that allows you to change the date with a Calendar popup
+12) Date column datatype added that allows you to change the date with a Calendar popup in main table and sub-tables
 13) Optional add/remove rows in main table and sub-tables by right clicking vertical headers
-14) sub-table supports datetime column when editing sub-table
 
 Features left to finish:
 
