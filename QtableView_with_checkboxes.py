@@ -565,6 +565,7 @@ class CustomTableView(QTableView):
 
         self.setDelegates()
         self.setEditTriggers(QAbstractItemView.CurrentChanged)
+        self.doubleClicked.connect(self.doubleclick_tableChange)
         self.vertical_header_setup()
         self.horizontal_header_setup()
 
@@ -604,6 +605,31 @@ class CustomTableView(QTableView):
         self.resizeColumnsToContents()
         if self.expandable_rows:
             self.setColumnWidth(0, 20)
+
+    def doubleclick_tableChange(self, index):
+        header_labels = []
+        for i in range(self.model.columnCount()):
+            header_labels.append(self.model.headerData(i, Qt.Horizontal, Qt.DisplayRole))
+
+        source_index = self.indexFromProxytoSource(index.row(), index.column())
+
+        row_data = self.model.table_data[source_index.row()]
+        title = "Modify row data"
+
+        checked_row_items = None
+        if self.columns_with_checkboxes:
+            checked_row_items = []
+            delegate = self.itemDelegate()
+            for key, value in delegate.checked_indexes_rows.items():
+                if index.row() in value:
+                    checked_row_items.append("TRUE")
+                else:
+                    checked_row_items.append("")
+
+        self.row_dialog = addRowMaintable_window(self, self.model.columnCount(), self.columns_with_checkboxes,
+                                                 self.datetime_columns, self.expandable_rows, header_labels, title,
+                                                 row_data, checked_row_items, self.datetime_columns)
+        self.row_dialog.exec()
 
     def show_context_menu(self, position):
         vertical_header = self.verticalHeader()
@@ -1222,7 +1248,7 @@ class CustomTableView(QTableView):
         upper_widget.setContentsMargins(30, 0, 0, 0)
         upper_layout = QVBoxLayout()
         upper_layout.setContentsMargins(0, 0, 0, 10)
-        sub_table = sub_TableWidget(self.add_subrow_option, self.del_subrow_option)
+        sub_table = sub_TableWidget(self.add_subrow_option, self.del_subrow_option, self.subtable_datetime_columns)
         sub_table.rowdataChanged.connect(self.sub_table_items_changed)
         sub_table.onAddRowChanged.connect(self.addSubRow)
         sub_table.onDelRowChanged.connect(self.delSubRow)
@@ -1265,16 +1291,16 @@ class CustomTableView(QTableView):
             for row in range(rows):
                 table.setRowHeight(row, 18)
                 for col in range(columns):
-                    if col not in self.subtable_col_checkboxes:
-                        item = QTableWidgetItem(self.sub_table_data[sub_table_index][row][col])
-                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                        table.setItem(row, col, item)
-
-                    elif col in self.subtable_col_checkboxes:
+                    if self.subtable_col_checkboxes and col in self.subtable_col_checkboxes:
                         widget = table.make_cell_checkbox()
                         check_value = self.sub_table_data[sub_table_index][row][col]
                         self.subtable_initial_checkbox_state(widget, check_value)
                         table.setCellWidget(row, col, widget)
+
+                    else:
+                        item = QTableWidgetItem(self.sub_table_data[sub_table_index][row][col])
+                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                        table.setItem(row, col, item)
 
     def subtable_initial_checkbox_state(self, widget: QWidget, value: str):
         if widget:
@@ -1401,7 +1427,10 @@ class CustomTableView(QTableView):
         for i in range(self.model.columnCount()):
             header_labels.append(self.model.headerData(i, Qt.Horizontal, Qt.DisplayRole))
 
-        self.row_dialog = addRowMaintable_window(self, self.model.columnCount(), self.columns_with_checkboxes, self.datetime_columns, self.expandable_rows, header_labels)
+        title = "Enter row data to add"
+
+        self.row_dialog = addRowMaintable_window(self, self.model.columnCount(), self.columns_with_checkboxes,
+                                                 self.datetime_columns, self.expandable_rows, header_labels, title)
         self.row_dialog.onaddRowChanged.connect(self.addMainRowUpdate)
         self.row_dialog.exec()
 
@@ -1999,11 +2028,12 @@ class sub_TableWidget(QTableWidget):
     onAddRowChanged = pyqtSignal(object)
     onDelRowChanged = pyqtSignal(object, int)
 
-    def __init__(self, add_subrow_option, del_subrow_option):
+    def __init__(self, add_subrow_option, del_subrow_option, subtable_datetime_columns):
         super(sub_TableWidget, self).__init__()
 
         self.add_subrow_option = add_subrow_option
         self.del_subrow_option = del_subrow_option
+        self.subtable_datetime_columns = subtable_datetime_columns
 
       #  self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.setAlternatingRowColors(True)
@@ -2071,7 +2101,7 @@ class sub_TableWidget(QTableWidget):
                         checkbox_columns.append(col)
                         row_data.append(str(checkbox_widget.isChecked()))
 
-        self.dlg = sub_table_window(self, sender.parent(), index, row_data, checkbox_columns, header_labels)
+        self.dlg = sub_table_window(self, sender.parent(), index, row_data, checkbox_columns, header_labels, self.subtable_datetime_columns)
         self.dlg.onsubtableChange.connect(self.sub_table_adjust)
         self.dlg.exec()
 
@@ -2151,13 +2181,14 @@ class sub_TableWidget(QTableWidget):
 class sub_table_window(QDialog):
     onsubtableChange = pyqtSignal(object, int, list)
 
-    def __init__(self, parent, table, row, row_data, checkbox_columns, header_labels):
+    def __init__(self, parent, table, row, row_data, checkbox_columns, header_labels, subtable_datetime_columns):
         super(QDialog, self).__init__(parent)
         self.table = table
         self.row_data = row_data
         self.row = row
         self.checkbox_columns = checkbox_columns
         self.header_labels = header_labels
+        self.subtable_datetime_columns = subtable_datetime_columns
 
         self.initUI()
 
@@ -2180,7 +2211,43 @@ class sub_table_window(QDialog):
             myfont = QFont()
             myfont.setBold(True)
 
-            if index not in self.checkbox_columns:
+            if self.checkbox_columns and index in self.checkbox_columns:
+                check = QCheckBox(self.header_labels[index])
+                self.widgets.append(check)
+
+                if value.upper() == "TRUE" or value.upper() == "T":
+                    check.setCheckState(Qt.Checked)
+                else:
+                    check.setCheckState(Qt.Unchecked)
+
+                self.layout.addWidget(check, alignment=Qt.AlignHCenter)
+
+            elif self.subtable_datetime_columns and index in self.subtable_datetime_columns:
+                edit_layout = QHBoxLayout()
+                label = QLabel(self.header_labels[index])
+                label.setFont(myfont)
+                label.setAlignment(Qt.AlignHCenter)
+
+                date = CustomDateEdit()
+                self.widgets.append(date)
+
+                # set date on calendar popup if valid date in cell, else set todays date
+                date_value = QDate.fromString(value, "MM/dd/yyyy")
+                if date_value.isValid():
+                    date.calendarWidget().setSelectedDate(date_value)
+                else:
+                    today = QDate.currentDate()
+                    date.calendarWidget().setSelectedDate(today)
+
+                date.setFocusPolicy(Qt.NoFocus)
+                date.setCalendarPopup(True)
+
+                edit_layout.addWidget(label)
+                edit_layout.addWidget(date)
+                edit_layout.addStretch()
+                self.layout.addLayout(edit_layout)
+
+            else:
                 edit_layout = QHBoxLayout()
                 label = QLabel(self.header_labels[index])
                 label.setFont(myfont)
@@ -2194,21 +2261,6 @@ class sub_table_window(QDialog):
                 edit_layout.addWidget(line_edit)
 
                 self.layout.addLayout(edit_layout)
-
-              #  self.layout.addWidget(label)
-             #   self.layout.addWidget(line_edit)
-               # self.layout.addSpacing(20)
-            elif index in self.checkbox_columns:
-                check = QCheckBox(self.header_labels[index])
-                self.widgets.append(check)
-
-                if value.upper() == "TRUE" or value.upper() == "T":
-                    check.setCheckState(Qt.Checked)
-                else:
-                    check.setCheckState(Qt.Unchecked)
-
-                self.layout.addWidget(check, alignment=Qt.AlignHCenter)
-               # self.layout.addSpacing(20)
 
         self.layout.addWidget(self.buttonBox, alignment=Qt.AlignHCenter)
         self.setLayout(self.layout)
@@ -2226,9 +2278,11 @@ class sub_table_window(QDialog):
         for widget in self.widgets:
             if isinstance(widget, QCheckBox):
                 row_data.append(str(widget.isChecked()))
-            else:
-                if isinstance(widget, QLineEdit):
+            elif isinstance(widget, QLineEdit):
                     row_data.append(widget.text())
+            elif isinstance(widget, QDateEdit):
+                date = widget.date()
+                row_data.append(date.toString("MM/dd/yyyy"))
 
         return row_data
 
@@ -2237,7 +2291,8 @@ class sub_table_window(QDialog):
 class addRowMaintable_window(QDialog):
     onaddRowChanged = pyqtSignal(list)
 
-    def __init__(self, parent, total_columns, columns_with_checkboxes, datetime_columns, expandable_rows, header_labels):
+    def __init__(self, parent, total_columns, columns_with_checkboxes, datetime_columns, expandable_rows, header_labels, title,
+                 row_data: List[str] = None, checked_row_items: dict = None):
         super(QDialog, self).__init__(parent)
 
         self.columns = total_columns
@@ -2245,6 +2300,9 @@ class addRowMaintable_window(QDialog):
         self.datetime_columns = datetime_columns
         self.expandable_rows = expandable_rows
         self.header_labels = header_labels
+        self.title = title
+        self.row_data = row_data
+        self.checked_row_items = checked_row_items
 
         self.initUI()
 
@@ -2262,7 +2320,7 @@ class addRowMaintable_window(QDialog):
 
         upper_layout = QVBoxLayout()
 
-        upper_label = QLabel("<b>Enter row data to add</b>")
+        upper_label = QLabel(f"<b>{self.title}</b>")
         upper_label.setAlignment(Qt.AlignHCenter)
 
         upper_layout.addWidget(upper_label)
@@ -2308,6 +2366,33 @@ class addRowMaintable_window(QDialog):
         upper_layout.addStretch()
         upper_layout.addWidget(self.buttonBox, alignment=Qt.AlignHCenter)
         self.setLayout(upper_layout)
+
+        # if row_data supplied, populate the widgets
+        if self.row_data:
+            self.populate_widgets(self.row_data)
+
+    def populate_widgets(self, row_data):
+        # WIP FUNCTION
+        # WIP FUNCTION
+        # WIP FUNCTION
+        # WIP FUNCTION
+        # WIP FUNCTION
+        # WIP FUNCTION
+        
+        for index, widget in enumerate(self.widgets):
+            if isinstance(widget, QDateEdit):
+                date_string = row_data[index]
+                date = QDate.fromString(date_string, "MM/dd/yyyy")
+                row_data.append(date_string)
+
+            elif isinstance(widget, QCheckBox):
+                row_data.append(str(widget.isChecked()))
+
+            else:
+                if isinstance(widget, QLineEdit):
+                    row_data.append(widget.text())
+
+        return row_data
 
     def accept_changes(self):
         row_values = self.find_layout_children()
