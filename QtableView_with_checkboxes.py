@@ -15,6 +15,11 @@ from PyQt5.QtWidgets import QApplication, QTableView, QVBoxLayout, QMainWindow, 
 from PyQt5.QtCore import Qt, QAbstractTableModel, QEvent, QVariant, QSize, QRect, QModelIndex, pyqtSignal, \
     QSortFilterProxyModel, QPoint, pyqtSlot, QCoreApplication, QTimer, QLocale, QItemSelectionModel, QDate
 
+"""
+Notes:  to make specific actions happen on double click based on column clicked, override doubleclick_tableChange function
+in the QTableView, for example if you'd rather have a PDF open when double clicking column 1
+
+"""
 
 # function purely for testing performance
 def random_indexes_for_testing(total_rows: int) -> List:
@@ -29,11 +34,19 @@ def random_indexes_for_testing(total_rows: int) -> List:
 
 class LineEdit(QLineEdit):
 
-    def __init__(self, parent=None):
+    def __init__(self, dblclick_edit_only, index, parent=None):
         super().__init__(parent)
+        self.index = index
+        self.dblclick_edit_only = dblclick_edit_only
 
     def focusInEvent(self, event):
         super().focusInEvent(event)
+
+    def mouseDoubleClickEvent(self, event):
+        if self.dblclick_edit_only:
+            main_table = self.parent().parent()
+            source_index = main_table.indexFromProxytoSource(self.index.row(), 0)
+            main_table.doubleclick_tableChange(source_index)
 
 
 class CustomDateEdit(QDateEdit):
@@ -70,10 +83,10 @@ class ButtonDelegate(QStyledItemDelegate):
 
     # passing keypresses from line edit to tableview to support in-column searching
     keyPressed = pyqtSignal(QLineEdit, QKeyEvent)
-
     datekeyPressed = pyqtSignal(QDateEdit)
 
-    def __init__(self, checked_indexes_rows, checked_indexed_columns, editable_columns, datetime_columns, expandable_rows, parent=None):
+    def __init__(self, checked_indexes_rows, checked_indexed_columns, editable_columns, datetime_columns, expandable_rows,
+                 dblclick_edit_only, parent=None):
         super(ButtonDelegate, self).__init__(parent)
 
         self.valid_date_formats = ["yyyy-MM-dd", "MM/dd/yyyy", "dd-MM-yyyy", "yyyy/MM/dd"]
@@ -88,6 +101,7 @@ class ButtonDelegate(QStyledItemDelegate):
         self.editable_columns = editable_columns
         self.datetime_columns = datetime_columns
         self.expandable_rows = expandable_rows
+        self.dblclick_edit_only = dblclick_edit_only
 
         self.expanded_rows = []
 
@@ -228,7 +242,7 @@ class ButtonDelegate(QStyledItemDelegate):
                 self.last_press_index = QModelIndex()
                 self.last_release_index = QModelIndex()
 
-        elif column in self.checked_indexed_columns:
+        elif column in self.checked_indexed_columns and not self.dblclick_edit_only:
             if self.last_press_index == self.last_release_index:
                 if row in self.checked_indexes_rows.get(column):
                     self.checked_indexes_rows[column].remove(row)
@@ -261,14 +275,14 @@ class ButtonDelegate(QStyledItemDelegate):
 
         if index.column() not in self.checked_indexed_columns and not expansion_rows and \
                 index.column() not in self.editable_columns and index.column() not in self.datetime_columns:
-            editor = LineEdit(parent)
+            editor = LineEdit(self.dblclick_edit_only, index, parent)
             editor.setReadOnly(True)
             self.oneditorStarted.emit(index, editor)
             editor.installEventFilter(self)
             return editor
 
         elif index.column() in self.editable_columns:
-            editor = LineEdit(parent)
+            editor = LineEdit(self.dblclick_edit_only, index, parent)
             editor.setReadOnly(False)
             self.oneditorStarted.emit(index, editor)
             editor.installEventFilter(self)
@@ -506,7 +520,7 @@ class CustomTableView(QTableView):
                  datetime_columns: List[int] = None, footer: bool = False, footer_values: dict = None,
                  subtable_col_checkboxes: List[int] = None, subtable_header_labels: List[str] = None, expandable_rows: bool = True,
                  add_mainrow_option: bool = False, del_mainrow_option: bool = False, add_subrow_option: bool = False,
-                 del_subrow_option: bool = False, subtable_datetime_columns: List[int] = None):
+                 del_subrow_option: bool = False, subtable_datetime_columns: List[int] = None, dblclick_edit_only: bool = False):
 
         super().__init__(parent)
         # parent being a qframe
@@ -529,6 +543,7 @@ class CustomTableView(QTableView):
         self.add_subrow_option = add_subrow_option
         self.del_subrow_option = del_subrow_option
         self.subtable_datetime_columns = subtable_datetime_columns
+        self.dblclick_edit_only = dblclick_edit_only
 
         self.footer_show = footer
         self.footer_row_boxes = []
@@ -947,7 +962,7 @@ class CustomTableView(QTableView):
     # set text alignments and add columns with checkboxes
     def setDelegates(self):
         button_delegate = ButtonDelegate(self.checked_indexes_rows, self.columns_with_checkboxes, self.editable_columns,\
-                                         self.datetime_columns, self.expandable_rows, self)
+                                         self.datetime_columns, self.expandable_rows, self.dblclick_edit_only, self)
         button_delegate.onexpansionChange.connect(self.expansion_clicked)
         button_delegate.oncheckboxstateChange.connect(self.checkboxstateChange)
         button_delegate.oneditorStarted.connect(self.update_vertical_header_arrow_and_editor)
@@ -2028,7 +2043,7 @@ class LazyDataViewer(QMainWindow):
                                           footer=True, footer_values=footer_values, subtable_col_checkboxes=sub_table_columns_with_checkboxes,
                                           subtable_header_labels=sub_table_headers_labels, expandable_rows=expandable_rows,
                                           add_mainrow_option=True, del_mainrow_option=True, add_subrow_option=True, del_subrow_option=True,
-                                          subtable_datetime_columns=[2])
+                                          subtable_datetime_columns=[2], dblclick_edit_only=True)
 
         self.main_layout.addWidget(self.frame)
 
@@ -2196,7 +2211,7 @@ class sub_TableWidget(QTableWidget):
 class sub_table_window(QDialog):
     onsubtableChange = pyqtSignal(object, int, list)
 
-    def __init__(self, parent, table, row, row_data, checkbox_columns, header_labels, subtable_datetime_columns):
+    def __init__(self, parent, table, row, row_data, checkbox_columns, header_labels, subtable_datetime_columns: List[int] = None):
         super(QDialog, self).__init__(parent)
         self.table = table
         self.row_data = row_data
