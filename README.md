@@ -32,6 +32,8 @@ Features left to finish:
         on loadup of the qtableview, right now this is populated just with some random lists with integers to represent which rows to check
 2) Cleaning up code so user can easily make the table and choose options
 3) Add option to export table to excel
+4) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
+   with current implementation... it's just a little visual indicator anyway
 
 Header drop down filters and sub-tables for each row:
 ![1](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/bcf1022e-7328-452f-9bd5-bb75ba64a500)
