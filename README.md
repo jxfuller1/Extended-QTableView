@@ -8,7 +8,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-Features that this currently has as of 2/12/2024:
+Features that this currently has as of 2/13/2024:
 
 1) Sorting
 2) Column Sections are movable
@@ -30,8 +30,9 @@ Features left to finish:
      a) this will require reworking the code a bit for changing checkbox states for the Qtableview based on TRUE/FALSE values from sql/dataframe table
         on loadup of the qtableview, right now this is populated just with some random lists with integers to represent which rows to check
 2) Cleaning up code so user can easily make the table and choose options
-3) Add option to make changing data in row on main table via double clicking on row and having a popup appear instead of editing directly on cell(s)  (basically already do this for the subtable widgets) (CURRENT WORK IN PROGRESS)
-4) Add option to export table to excel
+3) Add option to make changing data in row on main table via double clicking on row and having a popup appear instead of editing directly on cell(s)  (basically already do this for the subtable widgets)
+   A) this is halfway done, needs to be made an optional argument pass through to qtableview and need to add the doubleclick signal to the delegate and prevent delegate changes when this option is chosen
+5) Add option to export table to excel
 
 Header drop down filters and sub-tables for each row:
 ![1](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/bcf1022e-7328-452f-9bd5-bb75ba64a500)
