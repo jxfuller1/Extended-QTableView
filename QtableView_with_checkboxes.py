@@ -628,7 +628,8 @@ class CustomTableView(QTableView):
 
         self.row_dialog = addRowMaintable_window(self, self.model.columnCount(), self.columns_with_checkboxes,
                                                  self.datetime_columns, self.expandable_rows, header_labels, title,
-                                                 row_data, checked_row_items, self.datetime_columns)
+                                                 row_data, checked_row_items, source_index.row())
+        self.row_dialog.onexistingRowChanged.connect(self.addMainRowUpdate)
         self.row_dialog.exec()
 
     def show_context_menu(self, position):
@@ -1434,11 +1435,17 @@ class CustomTableView(QTableView):
         self.row_dialog.onaddRowChanged.connect(self.addMainRowUpdate)
         self.row_dialog.exec()
 
-    def addMainRowUpdate(self, values: list):
-        self.model.insertRow(values)
+    def addMainRowUpdate(self, values: list, existing_row_change: int = None):
 
-        # add row to end of table
-        row = self.model.rowCount()-1
+        if not existing_row_change:
+            self.model.insertRow(values)
+
+            # add row to end of table
+            row = self.model.rowCount()-1
+
+        if existing_row_change:
+            row = existing_row_change
+            self.model.table_data[row] = values
 
         # if there's checkboxes in table set checkstates for new row
         if self.columns_with_checkboxes:
@@ -1449,23 +1456,31 @@ class CustomTableView(QTableView):
                     if row not in rows:
                         delegate.checked_indexes_rows[col].append(row)
 
+                elif self.expandable_rows and "FALSE" in values[col-1].upper():
+                    if row in rows:
+                        delegate.checked_indexes_rows[col].remove(row)
+
                 elif not self.expandable_rows and "TRUE" in values[col].upper():
                     if row not in rows:
                         delegate.checked_indexes_rows[col].append(row)
 
+                elif not self.expandable_rows and "FALSE" in values[col].upper():
+                    if row in rows:
+                        delegate.checked_indexes_rows[col].remove(row)
+
         # update footer and filter comboboxes
         columns = self.model.columnCount()
-
         for col in range(columns):
             index = self.model.index(row, col)
             self.model_data_changed(index)
 
-        # add to sub_table_data
-        if self.expandable_rows:
-            self.sub_table_data.append([])
+        if not existing_row_change:
+            # add to sub_table_data
+            if self.expandable_rows:
+                self.sub_table_data.append([])
 
-        # update positions of tables if any on screen
-        self.update_sub_table_positions_timer()
+            # update positions of tables if any on screen
+            self.update_sub_table_positions_timer()
 
     def addSubRow(self, table: QTableWidget = None):
         # get row with the subtable widget
@@ -2290,9 +2305,10 @@ class sub_table_window(QDialog):
 # create a Qdialog for the user to insert data for the new row to be added
 class addRowMaintable_window(QDialog):
     onaddRowChanged = pyqtSignal(list)
+    onexistingRowChanged = pyqtSignal(list, int)
 
     def __init__(self, parent, total_columns, columns_with_checkboxes, datetime_columns, expandable_rows, header_labels, title,
-                 row_data: List[str] = None, checked_row_items: dict = None):
+                 row_data: List[str] = None, checked_row_items: List[int] = None, row: int = None):
         super(QDialog, self).__init__(parent)
 
         self.columns = total_columns
@@ -2303,6 +2319,7 @@ class addRowMaintable_window(QDialog):
         self.title = title
         self.row_data = row_data
         self.checked_row_items = checked_row_items
+        self.row = row
 
         self.initUI()
 
@@ -2372,34 +2389,42 @@ class addRowMaintable_window(QDialog):
             self.populate_widgets(self.row_data)
 
     def populate_widgets(self, row_data):
-        # WIP FUNCTION
-        # WIP FUNCTION
-        # WIP FUNCTION
-        # WIP FUNCTION
-        # WIP FUNCTION
-        # WIP FUNCTION
-        
+
         for index, widget in enumerate(self.widgets):
             if isinstance(widget, QDateEdit):
                 date_string = row_data[index]
                 date = QDate.fromString(date_string, "MM/dd/yyyy")
-                row_data.append(date_string)
+                widget.setDate(date)
 
             elif isinstance(widget, QCheckBox):
-                row_data.append(str(widget.isChecked()))
+                col_index = None
+                if self.expandable_rows and index+1 in self.checkbox_columns:
+                    col_index = self.checkbox_columns.index(index+1)
+                if not self.expandable_rows and index in self.checkbox_columns:
+                    col_index = self.checkbox_columns.index(index)
+
+                if col_index or col_index == 0:
+                    value = self.checked_row_items[col_index]
+                    if value.upper() == "TRUE" or value.upper() == "T":
+                        widget.setChecked(True)
+                    else:
+                        widget.setChecked(False)
 
             else:
                 if isinstance(widget, QLineEdit):
-                    row_data.append(widget.text())
-
-        return row_data
+                    value = row_data[index]
+                    widget.setText(value)
 
     def accept_changes(self):
-        row_values = self.find_layout_children()
+        if not self.row_data:
+            row_values = self.find_layout_children()
+            self.onaddRowChanged.emit(row_values)
+            self.close()
 
-        self.onaddRowChanged.emit(row_values)
-
-        self.close()
+        if self.row_data:
+            row_values = self.find_layout_children()
+            self.onexistingRowChanged.emit(row_values, self.row)
+            self.close()
 
     def find_layout_children(self) -> List[str]:
         row_data = []
