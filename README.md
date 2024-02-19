@@ -25,6 +25,8 @@ Features that this currently has as of 2/18/2024:
 13) Optional add/remove rows in main table and sub-tables by right clicking vertical headers
 14) Option to make table editing only happen on double clicks   (double clicking opens up qdialog to change data for row)
 
+
+
 Features left to finish:
 
 1) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked  ---- (Overall 30% finished)
