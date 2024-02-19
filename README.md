@@ -8,7 +8,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-Features that this currently has as of 2/14/2024:
+Features that this currently has as of 2/18/2024:
 
 1) Sorting
 2) Column Sections are movable
@@ -27,12 +27,20 @@ Features that this currently has as of 2/14/2024:
 
 Features left to finish:
 
-1) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked
-     a) this will require reworking the code a bit for changing checkbox states for the Qtableview based on TRUE/FALSE values from sql/dataframe table
-        on loadup of the qtableview, right now this is populated just with some random lists with integers to represent which rows to check
-2) Cleaning up code so user can easily make the table and choose options
-3) Add option to export table to excel
-4) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
+1) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked  ---- (Overall 30% finished)
+
+     Implementing this in 3 phase
+
+        a)  Code to extract info needed from SQL table and subtables with datetime conversion and conversion of checkbox data as a dict (if checkboxes) chosen  - COMPLETED
+
+        b)  Implement code to pass the neccessary info to the SQL functions with and return table datas as a list, this will contain a number of checks
+             for error checking and cleaned up code for easier user functionality to use                                                               --- WORK IN PROGRESS
+
+        c)  Code to udpate the SQL databases as date is changed on the table or rows added/deleted
+   
+3) Cleaning up code so user can easily make the table and choose options   ---- THIS BEING DONE IN CONJUCTION WITH STEP b) from above
+4) Add option to export table to excel
+5) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
    with current implementation... it's just a little visual indicator anyway
 
 Header drop down filters and sub-tables for each row:
