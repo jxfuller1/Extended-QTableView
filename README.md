@@ -28,6 +28,7 @@ Features that this currently has as of 2/18/2024:
 Features left to finish:
 
 1) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked  ---- (Overall 30% finished)
+     (i haven't uploaded the code i have for this just yet, it will also contain an extra file for the SQL functions)
 
      Implementing this in 3 phase
 
