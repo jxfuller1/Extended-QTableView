@@ -27,7 +27,7 @@ Because of this implementation with custom views/models/delegates it will remain
 
 
 
-<b>Features left to finish:</b>
+<b>Items left to finish:</b>
 
 1) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked  ---- (Overall 60% finished)
 
@@ -38,7 +38,7 @@ Because of this implementation with custom views/models/delegates it will remain
         b)  Implement code to pass the neccessary info to the SQL functions with and return table datas as a list, this will contain a number of checks
              for error checking and cleaned up code for easier user functionality to use                                                               --- COMPLETED couple bugs to fix
 
-        c)  Code to udpate the SQL databases as date is changed on the table or rows added/deleted
+        c)  Code to update the SQL databases as date is changed on the table or rows added/deleted
    
 2) Cleaning up code so user can easily make the table and choose options   ---- THIS BEING DONE IN CONJUCTION WITH STEP b) from above
    
@@ -47,8 +47,8 @@ Because of this implementation with custom views/models/delegates it will remain
 4) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
    with current implementation... it's just a little visual indicator anyway.
    
-5) Remove code for custom combobox filter dropdown locations, this uses the qapplication app to remove the default animations for the comboboxes,
-   however this means the user has to pass down the qapplication to the qtablview.... which i don't want.
+5) Remove code for custom combobox filter dropdown locations, this uses the qapplication from pyqt5 to remove the default animations for the comboboxes,
+   however this means the user has to pass down the qapplication to the qtableview.... which i don't want.
    
 6) Add Clear button for the datetime editor if user has datetime column
 
