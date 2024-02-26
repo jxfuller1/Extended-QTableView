@@ -27,7 +27,7 @@ Because of this implementation with custom views/models/delegates it will remain
 
 
 
-Features left to finish:
+<b>Features left to finish:</b>
 
 1) Connecting to SQL database to retrieve and write to as data is changed or checkboxes checked  ---- (Overall 60% finished)
 
