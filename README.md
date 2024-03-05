@@ -25,7 +25,7 @@ Because of this implementation with custom views/models/delegates it will remain
 13) Optional add/remove rows in main table and sub-tables by right clicking vertical headers
 14) Option to make table editing only happen on double clicks   (double clicking opens up qdialog to change data for row)
 15) support for using SQL database.
-    <ul>a) Grabbing data from SQL tables to popuplate Qtableview</ul>
+    <ul>a) Grabbing data from SQL tables to populate Qtableview</ul>
     <ul>b) Changes to table will be reflected to the SQL database.  (which includes the sub-tables)</ul>
     <ul>c) supports only using Sqlite3.</ul>
 
