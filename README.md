@@ -28,7 +28,7 @@ Because of this implementation with custom views/models/delegates it will remain
     <ul>a) Grabbing data from SQL tables to populate Qtableview</ul>
     <ul>b) Changes to table will be reflected to the SQL database.  (which includes the sub-tables)</ul>
     <ul>c) supports only using Sqlite3.</ul>
-    <ul>c) The way this is written, won't cause issues with multiple people making changes at the same time.</ul>
+    <ul>d) The way this is written, won't cause issues with multiple people making changes at the same time.</ul>
     
 
 
