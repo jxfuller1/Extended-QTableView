@@ -1,8 +1,9 @@
 import sys
-
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QApplication, QMainWindow
 
+# change testing_file3 to the file with the Qtableview
 import testing_file3
+
 import time
 
 class LazyDataViewer(QMainWindow):
@@ -40,7 +41,7 @@ class LazyDataViewer(QMainWindow):
         sql_subtable_path = r"\\NAS3\Users\Jason Fuller\Desktop\tables\subtables.db"
         sql_subtable_name = "K057_subtable"
         sub_table_headers_labels = ["NCR No.", "Disposition", "Date", "Extra", "Completed"]
-        expandable_rows = False
+        expandable_rows = True
 
         columns_with_checkboxes = [5, 6, 7, 13]
         datetime_columns = [2]
@@ -55,7 +56,7 @@ class LazyDataViewer(QMainWindow):
         add_subrow_option = True
         del_subrow_option = True
         subtable_datetime_columns = [2]
-        editable_columns = [10]
+        editable_columns = [0]
 
         table = testing_file3.setup_table(app=self.app, use_sql=use_sql, sql_maintable_name=sql_maintable_name, sql_maintable_path=sql_maintable_path,
                                           sql_subtable_path=sql_subtable_path, sql_subtable_name=sql_subtable_name,
