@@ -3,6 +3,7 @@ import time
 import bisect
 import SQL_table
 import pandas as pd
+from datetime import datetime
 
 import random   #this is for testing purposes
 from typing import List, Union, Tuple, Dict
@@ -34,6 +35,7 @@ def random_indexes_for_testing(total_rows: int) -> List:
 
     return random_indexes
 
+
 class LineEdit(QLineEdit):
 
     def __init__(self, dblclick_edit_only, index, parent=None):
@@ -48,7 +50,7 @@ class LineEdit(QLineEdit):
         if self.dblclick_edit_only:
             main_table = self.parent().parent()
             source_index = main_table.indexFromProxytoSource(self.index.row(), 0)
-            main_table.doubleclick_tableChange(source_index)
+            main_table.doubleclick_tableChange(source_index, self)
 
 
 class CustomDateEdit(QDateEdit):
@@ -79,7 +81,7 @@ class CustomDateEdit(QDateEdit):
 # delegate for entire qtableview
 class ButtonDelegate(QStyledItemDelegate):
     onexpansionChange = pyqtSignal(int, bool)
-    oncheckboxstateChange = pyqtSignal(int)
+    oncheckboxstateChange = pyqtSignal(int, int, str)
     # this signal is for updating the vertical header when editor is opened on cell for the arrow
     oneditorStarted = pyqtSignal(object, object)
 
@@ -108,11 +110,6 @@ class ButtonDelegate(QStyledItemDelegate):
         # this var for if user just clicks off popup without clicking a date, if cell has nothing in it, then it won't
         # popuplate the cell
         self.dateEditor_key_press = False
-
-        # add 1 to every item if expandable rows for the self.datetime_columns
-        # otherwise, the creation of the editor will be off by 1
-        if self.expandable_rows and self.datetime_columns:
-            self.datetime_columns = [x + 1 for x in self.datetime_columns]
 
         self.expanded_rows = []
 
@@ -161,12 +158,12 @@ class ButtonDelegate(QStyledItemDelegate):
         # display text from qabstractmodel
         if self.checked_indexed_columns and index.column() != 0 and index.column() not in self.checked_indexed_columns:
             text = index.data(Qt.DisplayRole)
-            text_rect = option.rect.adjusted(3, 3, -3, -3)
+            text_rect = option.rect.adjusted(3, 2, -3, -2)
             painter.drawText(text_rect, Qt.AlignTop | Qt.AlignLeft, text)
 
         if not self.checked_indexed_columns and index.column() != 0:
             text = index.data(Qt.DisplayRole)
-            text_rect = option.rect.adjusted(3, 3, -3, -3)
+            text_rect = option.rect.adjusted(3, 2, -3, -2)
             painter.drawText(text_rect, Qt.AlignTop | Qt.AlignLeft, text)
 
         if index.column() == 0 and self.expandable_rows:
@@ -195,7 +192,7 @@ class ButtonDelegate(QStyledItemDelegate):
 
         if index.column() == 0 and not self.expandable_rows:
             text = index.data(Qt.DisplayRole)
-            text_rect = option.rect.adjusted(3, 3, -3, -3)
+            text_rect = option.rect.adjusted(3, 2, -3, -2)
             painter.drawText(text_rect, Qt.AlignTop | Qt.AlignLeft, text)
 
         self.highlighted_index = QModelIndex()
@@ -263,11 +260,12 @@ class ButtonDelegate(QStyledItemDelegate):
                 if row in self.checked_indexes_rows.get(column):
                     self.checked_indexes_rows[column].remove(row)
 
-                    # emit to update proxy filter that checkbox states changed and update footer number
-                    self.oncheckboxstateChange.emit(column)
+                    # emit to update proxy filter that checkbox states changed and update footer number and update SQL if
+                    # sql database option chosen
+                    self.oncheckboxstateChange.emit(column, row, "False")
                 else:
                     self.checked_indexes_rows[column].append(row)
-                    self.oncheckboxstateChange.emit(column)
+                    self.oncheckboxstateChange.emit(column, row, "True")
 
                 self.last_press_index = QModelIndex()
                 self.last_release_index = QModelIndex()
@@ -277,12 +275,13 @@ class ButtonDelegate(QStyledItemDelegate):
     def pressed_expansion(self, row: int, expand: bool):
         self.onexpansionChange.emit(row, expand)
 
-    # return pressed checkbox and it's state:
+    # THIS COMMENTED FUNCTION NOT BEING USED - but keep around just in case
     def pressed_checkbox(self, row: int, column: int):
-        if row not in self.checked_indexes_rows.get(column):
-            print(f"Removed; Row index {row}, Column index {column}")
-        elif row in self.checked_indexes_rows.get(column):
-            print(f"Added; Row index {row}, Column index {column}")
+        pass
+        #if row not in self.checked_indexes_rows.get(column):
+        #    print(f"Removed; Row index {row}, Column index {column}")
+        #elif row in self.checked_indexes_rows.get(column):
+        #    print(f"Added; Row index {row}, Column index {column}")
 
     def createEditor(self, parent, option, index):
         expansion_rows = False
@@ -307,7 +306,7 @@ class ButtonDelegate(QStyledItemDelegate):
         elif self.checked_indexed_columns and index.column() in self.checked_indexed_columns:
             return
 
-        elif index.column() and not expansion_rows:
+        elif index.column() and not expansion_rows or index.column() == 0 and not expansion_rows:
             editor = LineEdit(self.dblclick_edit_only, index, parent)
             editor.setReadOnly(True)
             self.oneditorStarted.emit(index, editor)
@@ -452,6 +451,8 @@ class HiddenRowsProxyModel(QSortFilterProxyModel):
 
 
 class LazyDataModel(QAbstractTableModel):
+    sql_value_change = pyqtSignal(int, int, str)
+
     def __init__(self, data, columns_with_checkboxes, column_headers, expandable_rows):
         super().__init__()
 
@@ -521,6 +522,7 @@ class LazyDataModel(QAbstractTableModel):
         return super().flags(index) | Qt.ItemIsEditable  # add editable flag.
 
     def setData(self, index, value, role):
+
         if role == Qt.EditRole:
             # -1 on the column to account for the expansion column, set new value if value changed in cell
             if self.expandable_rows:
@@ -534,6 +536,9 @@ class LazyDataModel(QAbstractTableModel):
                 else:
                     self.table_data[index.row()][index.column()] = value
                 self.dataChanged.emit(index, index)
+
+                self.sql_value_change.emit(index.row(), index.column(), value)
+
                 return True
 
             return False
@@ -552,6 +557,14 @@ class LazyDataModel(QAbstractTableModel):
 
 
 class CustomTableView(QTableView):
+    sql_add_row = pyqtSignal(list)
+    sql_del_row = pyqtSignal(int)
+    onsql_rowChange = pyqtSignal(int, int, str)
+    sql_value_change = pyqtSignal(int, int, str)
+    sql_addrow_subtable = pyqtSignal(int, list)
+    sql_delrow_subtable = pyqtSignal(int, int)
+    sql_update_subtable = pyqtSignal(int, int, list)
+
     def __init__(self, app: QApplication, model, columns_with_checkboxes: List[int] = None, checked_indexes_rows: Dict[int, List[int]] = None,
                  sub_table_data: List[List[str]] = None, editable_columns: List[int] = None, parent=None,
                  datetime_columns: List[int] = None, footer: bool = False, footer_values: dict = None,
@@ -583,10 +596,6 @@ class CustomTableView(QTableView):
         self.del_subrow_option = del_subrow_option
         self.subtable_datetime_columns = subtable_datetime_columns
         self.dblclick_edit_only = dblclick_edit_only
-
-        # add 1 to variable to account if expandable_rows option chosen so that checkmarks populate to correct columns
-      #  if self.expandable_rows and self.columns_with_checkboxes:
-      #      self.columns_with_checkboxes = [x + 1 for x in self.columns_with_checkboxes]
 
         self.footer_show = footer
         self.footer_row_boxes = []
@@ -669,12 +678,15 @@ class CustomTableView(QTableView):
         if self.expandable_rows:
             self.setColumnWidth(0, 20)
 
-    def doubleclick_tableChange(self, index):
+    def doubleclick_tableChange(self, index, line_edit: QLineEdit = None):
         header_labels = []
         for i in range(self.model.columnCount()):
             header_labels.append(self.model.headerData(i, Qt.Horizontal, Qt.DisplayRole))
 
-        source_index = self.indexFromProxytoSource(index.row(), index.column())
+        if not line_edit:
+            source_index = self.indexFromProxytoSource(index.row(), index.column())
+        else:
+            source_index = index
 
         row_data = self.model.table_data[source_index.row()]
         title = "Modify row data"
@@ -922,6 +934,10 @@ class CustomTableView(QTableView):
 
                 if len(value) != 0:
                     text = ", ".join(str(x) for x in value)
+
+                    if len(text) > 200:
+                        text = "Many....."
+
                     combo_item = str(header_label) + " = " + text
                     self.filter_widget_combo.addItem(combo_item)
 
@@ -933,6 +949,9 @@ class CustomTableView(QTableView):
             for i in range(self.filter_widget_combo.count()):
                 width = self.filter_widget_combo.fontMetrics().width(self.filter_widget_combo.itemText(i))
                 max_width = max(max_width, width)
+
+            if max_width > 1000:
+                max_width = 1000
 
             self.filter_widget_combo.view().setFixedWidth(max_width+20)
 
@@ -1032,7 +1051,7 @@ class CustomTableView(QTableView):
         self.closeEditor(dateEdit, QAbstractItemDelegate.NoHint)
 
     # for updating what's filtered when checkbox state changes
-    def checkboxstateChange(self, column: int):
+    def checkboxstateChange(self, column: int, row: int, checkbox_state: str):
         #  update footer row data
         if self.footer_show:
             self.setFooterValue(column)
@@ -1048,6 +1067,9 @@ class CustomTableView(QTableView):
 
         # update tables if row with table gets filtered
         self.onfilterChange_sub_tables()
+
+        # update sql database if that option chosen
+        self.sql_value_change.emit(row, column, checkbox_state)
 
     @pyqtSlot(QSize)
     def handle_parent_resize(self, size):
@@ -1111,7 +1133,7 @@ class CustomTableView(QTableView):
         # Sort the data based on the specified column and order
         delegate = self.itemDelegate()
 
-        if column in self.columns_with_checkboxes:
+        if self.columns_with_checkboxes and column in self.columns_with_checkboxes:
             checked_rows = delegate.checked_indexes_rows[column]
             checked_rows.sort()
 
@@ -1142,9 +1164,8 @@ class CustomTableView(QTableView):
             self.change_combo_box_checkstates(combobox, True)
 
         elif combo_index == 1 and filter_value == "Clear":
-            if column_clicked not in self.columns_with_checkboxes:
-                base_range = 4
-            else:
+            base_range = 4
+            if self.columns_with_checkboxes and column_clicked in self.columns_with_checkboxes:
                 base_range = 2
 
             self.filter_dict[column_clicked] = [combobox.itemText(i) for i in range(base_range, combobox.count())]
@@ -1335,11 +1356,19 @@ class CustomTableView(QTableView):
         # Find row index (based on key value in the dictionary that im storing the opened table widgets in)
         table_row = [key for key, value in self.sub_table_widgets.items() if value == table.parent()]
 
+        # if row is last one in list (such as adding a row) then append, if modifying existing row then change
+        # the list values
         if len(self.sub_table_data[table_row[0]]) <= row:
             # append if new row
             self.sub_table_data[table_row[0]].append(row_data)
+
+            # update sql database if using sql for
+            self.sql_addrow_subtable.emit(table_row[0], row_data)
         else:
             self.sub_table_data[table_row[0]][row] = row_data
+
+            # update sql row if using sql
+            self.sql_update_subtable.emit(table_row[0], row, row_data)
 
     def sub_table_populate(self, sub_table_index: int, widget: QWidget):
         table = None
@@ -1409,15 +1438,25 @@ class CustomTableView(QTableView):
     def on_cell_clicked(self, index: QModelIndex):
         self.update_vertical_header_arrow_and_editor(index)
 
-       # if not self.expandable_rows:
-         #   if self.columns_with_checkboxes and index.column() not in self.columns_with_checkboxes:
+        if not self.expandable_rows:
+            if self.columns_with_checkboxes and index.column() not in self.columns_with_checkboxes:
+                self.edit(index)
+            elif not self.columns_with_checkboxes:
+                self.edit(index)
 
+        elif self.columns_with_checkboxes and index.column() not in self.columns_with_checkboxes and index.column() != 0:
+            self.edit(index)
+
+        elif not self.columns_with_checkboxes and index.column() != 0:
+            self.edit(index)
+
+        # FIX THIS BECAUSE THE 1st COLUMN CAN"T BE EDITED
 
 
         # activate editor on cell click
-        if self.columns_with_checkboxes and index.column() not in self.columns_with_checkboxes and index.column() != 0 \
-                or not self.columns_with_checkboxes and index.column() != 0:
-            self.edit(index)
+      #  if self.columns_with_checkboxes and index.column() not in self.columns_with_checkboxes and index.column() != 0 \
+      #          or not self.columns_with_checkboxes and index.column() != 0:
+      #      self.edit(index)
 
         # this is to support the header repaint/sort not being run on the first click out of qcombox popups
         if self.header.sectionsClickable() == True:
@@ -1491,6 +1530,8 @@ class CustomTableView(QTableView):
         # update table positions if any on screen
         self.update_sub_table_positions_timer()
 
+        self.sql_del_row.emit(index.row())
+
     def addMainRowMsg(self, row: int):
         reply = QMessageBox.question(self, 'Add Row', 'Add new row to end of table?',
                                      QMessageBox.Ok | QMessageBox.Cancel, QMessageBox.Cancel)
@@ -1513,19 +1554,21 @@ class CustomTableView(QTableView):
         self.row_dialog.onaddRowChanged.connect(self.addMainRowUpdate)
         self.row_dialog.exec()
 
-        print(self.sub_table_data)
-
     def addMainRowUpdate(self, values: list, existing_row_change: int = None):
 
-        if not existing_row_change:
+        if existing_row_change == None:
             self.model.insertRow(values)
 
             # add row to end of table
             row = self.model.rowCount()-1
 
-        if existing_row_change:
+        if existing_row_change != None:
             row = existing_row_change
             self.model.table_data[row] = values
+
+            # for updating all values of sql row if sql being used
+            for index, value in enumerate(values):
+                self.onsql_rowChange.emit(row, index, value)
 
         # if there's checkboxes in table set checkstates for new row
         if self.columns_with_checkboxes:
@@ -1554,13 +1597,15 @@ class CustomTableView(QTableView):
             index = self.model.index(row, col)
             self.model_data_changed(index)
 
-        if not existing_row_change:
+        if existing_row_change == None:
             # add to sub_table_data
             if self.expandable_rows:
                 self.sub_table_data.append([])
 
             # update positions of tables if any on screen
             self.update_sub_table_positions_timer()
+
+            self.sql_add_row.emit(values)
 
     def addSubRow(self, table: QTableWidget = None):
         # get row with the subtable widget
@@ -1569,18 +1614,6 @@ class CustomTableView(QTableView):
         for key, value in self.sub_table_widgets.items():
             if value == widget:
                 row_selected = key
-
-        # for i in range(self.model.rowCount()):
-        #     if "\u27A1" in self.model.headerData(i, Qt.Vertical, Qt.DisplayRole):
-        #         row_selected = i
-
-        # get table
-        # table = None
-        # if row_selected in self.sub_table_widgets:
-        #     widget = self.sub_table_widgets[row_selected]
-        #     for child_widget in widget.findChildren(QWidget):
-        #         if isinstance(child_widget, QTableWidget):
-        #             table = child_widget
 
         if table:
             header_labels = [table.horizontalHeaderItem(col).text() for col in range(table.columnCount())]
@@ -1594,13 +1627,19 @@ class CustomTableView(QTableView):
             table.insertRow(index)
             table.setRowHeight(index, 18)
 
+            # add new row to subtable data
+            # self.sub_table_items_changed(index, row_data, table)
+
+            table.sub_table_adjust(table, index, row_data)
+
+            # below code will update the new row
             # add checkboxes to new row
             if self.subtable_col_checkboxes:
                 for i in self.subtable_col_checkboxes:
                     checkbox = table.make_cell_checkbox()
                     table.setCellWidget(index, i, checkbox)
 
-            self.dlg = sub_table_window(self, table, index, row_data, checkbox_columns, header_labels)
+            self.dlg = sub_table_window(self, table, index, row_data, checkbox_columns, header_labels, self.subtable_datetime_columns)
             self.dlg.onsubtableChange.connect(table.sub_table_adjust)
             self.dlg.exec()
 
@@ -1630,6 +1669,8 @@ class CustomTableView(QTableView):
         # map to proxy index and set row height
         index = self.indexFromSourcetoProxy(row_selected, 0)
         self.setRowHeight(index.row(), height+15)
+
+        self.sql_delrow_subtable.emit(row_selected, row)
 
 
 # for sub_table widget
@@ -1699,10 +1740,9 @@ class ComboBox(QComboBox):
         # doing this makes it work with section moves
 
         logical_index = self.parent().logicalIndex(self.parent().m_buttons.index(self))
-        if logical_index in self.parent().parent().columns_with_checkboxes:
+        base_row = 4
+        if self.parent().parent().columns_with_checkboxes and logical_index in self.parent().parent().columns_with_checkboxes:
             base_row = 2
-        else:
-            base_row = 4
 
         item = self.model().itemFromIndex(index)
 
@@ -1756,10 +1796,9 @@ class ComboBox(QComboBox):
     # for combobox all or clear filter options
     def check_uncheck_all_items(self, check_all: bool):
         logical_index = self.parent().logicalIndex(self.parent().m_buttons.index(self))
-        if logical_index in self.parent().parent().columns_with_checkboxes:
+        base_row = 4
+        if self.parent().parent().columns_with_checkboxes and logical_index in self.parent().parent().columns_with_checkboxes:
             base_row = 2
-        else:
-            base_row = 4
 
         if check_all:
             for i in range(base_row, self.count()):
@@ -1910,9 +1949,8 @@ class ButtonHeaderView(QHeaderView):
     # this is for finding which index to start off for sorting/add items to the qcomboboxes, due to the filter combos
     # boxes have different base filtering options
     def combo_base_index(self, column: int) -> int:
-        if self.parent().columns_with_checkboxes and column not in self.parent().columns_with_checkboxes:
-            base_index = 4
-        else:
+        base_index = 4
+        if self.parent().columns_with_checkboxes and column in self.parent().columns_with_checkboxes:
             base_index = 2
 
         return base_index
@@ -1926,7 +1964,7 @@ class ButtonHeaderView(QHeaderView):
                 visual_column = self.logicalIndex(column)
 
                 # this complicated list comprehensions gets all item values from given column
-                column_values = [(str(self.model().data(self.model().index(row, visual_column), Qt.DisplayRole))).strip()
+                column_values = [(str(self.model().data(self.model().index(row, visual_column), Qt.DisplayRole)))
                                  for row in range(self.model().rowCount())]
 
                 remove_blanks = [item for item in column_values if item != ""]
@@ -2210,7 +2248,6 @@ class sub_TableWidget(QTableWidget):
         self.dlg.exec()
 
     def sub_table_adjust(self, table: QTableWidget, row: int, row_data: List[str]):
-
         for col in range(table.columnCount()):
             # check if cell widget
             widget = self.cellWidget(row, col)
@@ -2375,7 +2412,7 @@ class sub_table_window(QDialog):
 
         self.onsubtableChange.emit(self.table, self.row, row_values)
 
-        self.close()
+        self.accept()
 
     def find_layout_children(self) -> List[str]:
         row_data = []
@@ -2592,6 +2629,8 @@ class setup_table(QFrame):
         self.sql_subtable_name = sql_subtable_name
         self.sql_subtable_query = sql_subtable_query
 
+        self.maintable_rowids = []
+
         self.maintable_df = None
 
         # if using sql try to get the main table data from the SQL data base & sub table as a list of lists
@@ -2626,6 +2665,12 @@ class setup_table(QFrame):
         # get main talbe Data
         df = SQL_table.sql_maintable_to_dataframe(self.sql_maintable_path, self.sql_maintable_name,
                                                   self.sql_maintable_query)
+
+        # retrieve rowid's corresponding to each row of the self.maintable_data, this will be used
+        # for updating sql table
+        main_rowids = SQL_table.sql_get_all_rowids(self.sql_maintable_path, self.sql_maintable_name)
+        self.maintable_rowids = main_rowids
+
         if not isinstance(df, pd.DataFrame):
             print("ERROR, Couldn't read SQL main table!")
         else:
@@ -2664,12 +2709,20 @@ class setup_table(QFrame):
             self.checked_indexes_rows = modified_dict
         if self.expandable_rows and self.editable_columns:
             self.editable_columns = [x + 1 for x in self.editable_columns]
+        if self.expandable_rows and self.datetime_columns:
+            self.datetime_columns = [x + 1 for x in self.datetime_columns]
+
         if self.footer and self.footer_value:
             modified_dict = {key + 1: value for key, value in self.footer_value.items()}
             self.footer_value = modified_dict
 
     def activate_table(self):
-        self.model = LazyDataModel(self.maintable_data, self.columns_with_checkboxes, self.maintable_headers, self.expandable_rows)
+        # note have to send copy to lazydatamodel of the main table data, otherwise changes for the main table data
+        # will affect the variable in this class
+        self.model_data = self.maintable_data.copy()
+
+        self.model = LazyDataModel(self.model_data, self.columns_with_checkboxes, self.maintable_headers, self.expandable_rows)
+        self.model.sql_value_change.connect(self.sql_maintable_value_change)
         self.table_view = CustomTableView(self.app, self.model, self.columns_with_checkboxes, self.checked_indexes_rows, self.sub_table_data,
                                           editable_columns=self.editable_columns, parent=self, datetime_columns=self.datetime_columns,
                                           footer=self.footer, footer_values=self.footer_value, subtable_col_checkboxes=self.subtable_col_checkboxes,
@@ -2677,6 +2730,13 @@ class setup_table(QFrame):
                                           add_mainrow_option=self.add_mainrow_option, del_mainrow_option=self.del_mainrow_option,
                                           add_subrow_option=self.add_subrow_option, del_subrow_option=self.del_subrow_option,
                                           subtable_datetime_columns=self.subtable_datetime_columns, dblclick_edit_only=self.dblclick_edit_only)
+        self.table_view.sql_add_row.connect(self.sql_maintable_addrow)
+        self.table_view.sql_del_row.connect(self.sql_maintable_delrow)
+        self.table_view.onsql_rowChange.connect(self.sql_maintable_entire_rowChange)
+        self.table_view.sql_value_change.connect(self.sql_maintable_value_change)
+        self.table_view.sql_addrow_subtable.connect(self.sql_subtable_addrow)
+        self.table_view.sql_delrow_subtable.connect(self.sql_subtable_delrow)
+        self.table_view.sql_update_subtable.connect(self.sql_subtable_updaterow)
 
     def resizeEvent(self, event):
         # Handle the resize event of the QFrame
@@ -2686,6 +2746,143 @@ class setup_table(QFrame):
         table_view_size = self.size()
         new_size = QSize(table_view_size.width()-2, table_view_size.height()-2)
         self.resizeSignal.emit(new_size)
+
+    def sql_subtable_updaterow(self, maintable_index: int, subrow_index: int, subtable_values: List[str]):
+        # append maintable row Index to the subtable_values, this is so that the program knows
+        # which subtables rows below to which maintable row
+        subtable_values.insert(0, maintable_index)
+
+        if self.use_sql:
+            table_name = self.sql_subtable_name
+
+            # column from subtable database that references the maintable rows
+            column_to_search = "maintable_index"
+            query = f'SELECT rowid, * FROM "{table_name}" WHERE "{column_to_search}" = {maintable_index}'
+
+            # return row data for all rows with that maintable_index
+            result = SQL_table.sql_query_table(self.sql_subtable_path, self.sql_subtable_name, query)
+
+            if result != None:
+                try:
+                    # first one of tuple is row id in database
+                    row_id_to_update = result[subrow_index][0]
+
+                    for index, value in enumerate(subtable_values):
+                        SQL_table.update_sql_table_cell(self.sql_subtable_path, table_name, row_id_to_update, value,
+                                                    column_index=index)
+                except:
+                    self.error_message("ERROR, index out of range, mismatch between sub-table and database OR \n"
+                                       "someone may have already removed this row, refresh table if needed", "ERROR")
+
+    def sql_subtable_addrow(self, maintable_index: int, subtable_values: List[str]):
+        # append maintable row Index to the subtable_values, this is so that the program knows
+        # which subtables rows below to which maintable row
+        subtable_values.insert(0, maintable_index)
+
+        if self.use_sql:
+            SQL_table.add_sql_row(self.sql_subtable_path, self.sql_subtable_name, subtable_values)
+
+
+            # code for testing
+            #allsub_tables = SQL_table.sql_tables(self.sql_subtable_path)
+            #sub_df = SQL_table.sql_subtable_to_dataframe(self.sql_subtable_path, allsub_tables, self.sql_subtable_name,
+            #                                           self.sub_table_headers_labels, self.sql_subtable_query)
+            #print(sub_df)
+
+    def sql_subtable_delrow(self, maintable_index: int, subtable_index: int):
+        if self.use_sql:
+            table_name = self.sql_subtable_name
+
+            # column from subtable database that references the maintable rows
+            column_to_search = "maintable_index"
+            query = f'SELECT rowid, * FROM "{table_name}" WHERE "{column_to_search}" = {maintable_index}'
+
+            # return row data for all rows with that maintable_index
+            result = SQL_table.sql_query_table(self.sql_subtable_path, self.sql_subtable_name, query)
+
+            if result != None:
+                # first one of tuple is row id in database
+                try:
+                    row_id_to_remove = result[subtable_index][0]
+
+                    # remove row from database
+                    SQL_table.del_sql_row(self.sql_subtable_path, self.sql_subtable_name, row_id_to_remove)
+                except:
+                    self.error_message("ERROR, index out of range, mismatch between sub-table and database OR \n"
+                                       "someone may have already removed this row, refresh table if needed", "ERROR")
+
+    def sql_maintable_delrow(self, row: int):
+        rowid = self.maintable_rowids[row]
+
+        if self.use_sql:
+            SQL_table.del_sql_row(self.sql_maintable_path, self.sql_maintable_name, rowid)
+            self.maintable_rowids.remove(rowid)
+            del self.maintable_data[row]
+
+            # delete corresponding rows in the sql sub-table
+            if self.sql_subtable_path:
+                # return any rowid's if any for maintable row index
+                table_name = self.sql_subtable_name
+
+                # column from subtable database that references the maintable rows
+                column_to_search = "maintable_index"
+                query = f'SELECT rowid, * FROM "{table_name}" WHERE "{column_to_search}" = {row}'
+
+                # return row data for all rows with that maintable_index
+                result = SQL_table.sql_query_table(self.sql_subtable_path, self.sql_subtable_name, query)
+
+                try:
+                    rowids = [row[0] for row in result]
+                    for rowid in rowids:
+                        # remove row from database
+                        SQL_table.del_sql_row(self.sql_subtable_path, self.sql_subtable_name, rowid)
+                except:
+                    self.error_message("ERROR, index out of range, mismatch between sub-table and database OR \n"
+                                       "someone may have already removed this row, refresh table if needed", "ERROR")
+
+    def sql_maintable_addrow(self, values: list):
+        # convert any datetimes to datetime object if option chosen
+        if self.datetime_columns:
+
+            # -1 because list starts at index 0 and if self.expandable_rows, +1 was added to the datetime_columns list
+            col_mod = 0
+            if self.expandable_rows:
+                col_mod = 1
+
+            for date_col in self.datetime_columns:
+                values[date_col - col_mod] = datetime.strptime(values[date_col - col_mod], "%m/%d/%Y")
+
+        if self.use_sql:
+            rowid = SQL_table.add_sql_row(self.sql_maintable_path, self.sql_maintable_name, values)
+            self.maintable_rowids.append(rowid)
+            self.maintable_data.append(values)
+
+    def sql_maintable_entire_rowChange(self, row, column, value):
+        # convert date time back to it's original indexes values if self.expandable_rows
+        if self.expandable_rows and self.datetime_columns:
+            date_columns = [x - 1 for x in self.datetime_columns]
+            if column in date_columns:
+                value = datetime.strptime(value, "%m/%d/%Y")
+
+        elif self.datetime_columns and column in self.datetime_columns:
+            value = datetime.strptime(value, "%m/%d/%Y")
+
+        if self.use_sql:
+            rowid = self.maintable_rowids[row]
+            SQL_table.update_sql_table_cell(self.sql_maintable_path, self.sql_maintable_name, rowid, value,
+                                            column_index=column)
+
+    def sql_maintable_value_change(self, row, column, value):
+        if self.datetime_columns and column in self.datetime_columns:
+            value = datetime.strptime(value, "%m/%d/%Y")
+
+        if self.use_sql:
+            # account for expandable_rows
+            if self.expandable_rows:
+                column = column - 1
+
+            rowid = self.maintable_rowids[row]
+            SQL_table.update_sql_table_cell(self.sql_maintable_path, self.sql_maintable_name, rowid, value, column_index=column)
 
     def sql_check_error(self):
         if self.use_sql:
@@ -2736,9 +2933,13 @@ class setup_table(QFrame):
                       "Must be sub-row data for every row in main table, even if blank.")
                 return False
 
+        if self.use_sql:
+            if len(self.maintable_data) != len(self.maintable_rowids):
+                print("ERROR, Mismatch between main table rows and SQL rows", "ERROR")
+                return False
+
         return True
 
-    # this not being used at the moment
     def error_message(self, msg, title):
         msgBox = QMessageBox()
         msgBox.setIcon(QMessageBox.Information)
