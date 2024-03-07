@@ -29,23 +29,20 @@ Because of this implementation with custom views/models/delegates it will remain
     <ul>b) Changes to table will be reflected to the SQL database.  (which includes the sub-tables)</ul>
     <ul>c) supports only using Sqlite3.</ul>
     <ul>d) The way this is written, won't cause issues with multiple people making changes at the same time.</ul>
+16) Export visible rows to Excel
     
 
 
 
 <b>Items left to finish:</b>
    
-1) Add option to export table to excel
-   
-2) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
+1) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
    with current implementation... it's just a little visual indicator anyway.
    
-3) Remove code for custom combobox filter dropdown locations, this uses the qapplication from pyqt5 to remove the default animations for the comboboxes,
+2) Remove code for custom combobox filter dropdown locations, this uses the qapplication from pyqt5 to remove the default animations for the comboboxes,
    however this means the user has to pass down the qapplication to the qtableview.... which i don't want.
-   
-4) Add Clear button for the datetime editor if user has datetime column
 
-5) Add clear function to Qtableview if user clears table to populate table with new data. The clear function will make sure all necessary variables get
+3) Add clear function to Qtableview if user clears table to populate table with new data. The clear function will make sure all necessary variables get
    safely reset
 
    
