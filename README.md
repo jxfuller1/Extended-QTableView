@@ -15,21 +15,20 @@ Because of this implementation with custom views/models/delegates it will remain
 3) Filtering w/ Comboboxes at the headers
 4) Expansion of rows that display sub-tablewidgets to give additional information for each row
 5) Checkboxes in columns for main table and sub-table widgets
-6) Setting which columns you want to be editable
-7) Being able to edit cell data
-8) Filter combobox options update dynamically as cell data is changed
-9) In-column searching   (as you type in a cell it will search the column and highlight the matching string typed)
-10) Optionable Footer Row
-11) Current Filters applied will show up below footer
-12) Date column datatype added that allows you to change the date with a Calendar popup in main table and sub-tables
-13) Optional add/remove rows in main table and sub-tables by right clicking vertical headers
-14) Option to make table editing only happen on double clicks   (double clicking opens up qdialog to change data for row)
-15) support for using SQL database.
+6) Setting which columns you want to be editable or non-editable
+7) Filter combobox options update dynamically as cell data is changed
+8) In-column searching   (as you type in a cell it will search the column and highlight the matching string typed)
+9) Optionable Footer Row
+10) Current Filters applied will show up below footer
+11) Date column datatype added that allows you to change the date with a Calendar popup in main table and sub-tables
+12) Optional add/remove rows in main table and sub-tables by right clicking vertical headers
+13) Option to make table editing only happen on double clicks   (double clicking opens up qdialog to change data for row)
+14) support for using SQL database.
     <ul>a) Grabbing data from SQL tables to populate Qtableview</ul>
     <ul>b) Changes to table will be reflected to the SQL database.  (which includes the sub-tables)</ul>
     <ul>c) supports only using Sqlite3.</ul>
     <ul>d) The way this is written, won't cause issues with multiple people making changes at the same time.</ul>
-16) Export visible rows to Excel
+15) Export visible rows to Excel
     
 
 
