@@ -47,6 +47,8 @@ Because of this implementation with custom views/models/delegates it will remain
 4) Need to do some additional testing with the various options to squash bugs
    
 5) Make documentation for the use of this
+
+   
 Header drop down filters and sub-tables for each row:
 ![1](https://github.com/jxfuller1/QTableView-with-Checkboxes-subtables-filtering-and-more/assets/123666150/bcf1022e-7328-452f-9bd5-bb75ba64a500)
 
