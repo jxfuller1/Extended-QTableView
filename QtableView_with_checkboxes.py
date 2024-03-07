@@ -14,7 +14,7 @@ from PyQt5.QtWidgets import QApplication, QTableView, QVBoxLayout, QMainWindow, 
     QAbstractItemDelegate, QStyledItemDelegate, QPushButton, QWidget, QItemDelegate, QStyleOptionButton, QStyle, \
     QTableWidget, QHeaderView, QLabel, QLineEdit, QDialogButtonBox, QDialog, QTableWidgetItem, QComboBox, QFrame, \
     QCheckBox, QStyleOptionViewItem, QScrollBar, QHBoxLayout, QSizePolicy, QSpacerItem, QCalendarWidget, QDateEdit, \
-    QMenu, QAction, QMessageBox
+    QMenu, QAction, QMessageBox, QFileDialog
 from PyQt5.QtCore import Qt, QAbstractTableModel, QEvent, QVariant, QSize, QRect, QModelIndex, pyqtSignal, \
     QSortFilterProxyModel, QPoint, pyqtSlot, QCoreApplication, QTimer, QLocale, QItemSelectionModel, QDate
 
@@ -53,14 +53,39 @@ class LineEdit(QLineEdit):
             main_table.doubleclick_tableChange(source_index, self)
 
 
+class CustomCalendarWidget(QCalendarWidget):
+    cleardate = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super(CustomCalendarWidget, self).__init__(parent)
+
+        self.custom_button = QPushButton("Clear Date", self)
+        self.custom_button.clicked.connect(self.clearOut_date)
+
+        self.setVerticalHeaderFormat(QCalendarWidget.NoVerticalHeader)
+
+    def clearOut_date(self):
+        self.cleardate.emit()
+
+    def paintCell(self, painter, rect, date):
+        super(CustomCalendarWidget, self).paintCell(painter, rect, date)
+        self.custom_button.setGeometry(self.width()-65, self.height()-18, 65, 18)
+
+
 class CustomDateEdit(QDateEdit):
     onDateChanged = pyqtSignal(object)
+    cleardateChanged = pyqtSignal(object)
 
     def __init__(self, parent=None):
         super(CustomDateEdit, self).__init__(parent)
 
         self.setCalendarPopup(True)
         self.popup_installed = False
+
+        # Create and set the custom calendar widget
+        custom_calendar_widget = CustomCalendarWidget(self)
+        custom_calendar_widget.cleardate.connect(self.clear_date_changed)
+        self.setCalendarWidget(custom_calendar_widget)
 
     def showEvent(self, event):
         # Override showEvent to access the calendar popup and install event filter
@@ -77,6 +102,9 @@ class CustomDateEdit(QDateEdit):
     def on_calendar_clicked(self, date):
         self.onDateChanged.emit(self)
 
+    def clear_date_changed(self):
+        self.cleardateChanged.emit(self)
+
 
 # delegate for entire qtableview
 class ButtonDelegate(QStyledItemDelegate):
@@ -88,6 +116,7 @@ class ButtonDelegate(QStyledItemDelegate):
     # passing keypresses from line edit to tableview to support in-column searching
     keyPressed = pyqtSignal(QLineEdit, QKeyEvent)
     datekeyPressed = pyqtSignal(QDateEdit)
+    cleardatekeyPressed = pyqtSignal(QDateEdit)
 
     def __init__(self, checked_indexes_rows, checked_indexed_columns, editable_columns, datetime_columns, expandable_rows,
                  dblclick_edit_only, parent=None):
@@ -110,6 +139,7 @@ class ButtonDelegate(QStyledItemDelegate):
         # this var for if user just clicks off popup without clicking a date, if cell has nothing in it, then it won't
         # popuplate the cell
         self.dateEditor_key_press = False
+        self.clear_date_pressed = False
 
         self.expanded_rows = []
 
@@ -298,6 +328,7 @@ class ButtonDelegate(QStyledItemDelegate):
         elif self.datetime_columns and index.column() in self.datetime_columns:
             editor = CustomDateEdit(parent)
             editor.onDateChanged.connect(self.on_date_editor_changed)
+            editor.cleardateChanged.connect(self.clear_calendar_date)
             editor.setMaximumWidth(18)
             editor.setFocusPolicy(Qt.NoFocus)
             editor.setCalendarPopup(True)
@@ -373,9 +404,20 @@ class ButtonDelegate(QStyledItemDelegate):
             source_model.setData(source_index, date_string, Qt.EditRole)
             self.dateEditor_key_press = False
 
+        # this is for the clear button in the calendar
+        elif self.datetime_columns and index.column() in self.datetime_columns and self.clear_date_pressed:
+            source_index = model.mapToSource(index)  # Map to the source index
+            source_model = model.sourceModel()  # Get the source model from the proxy model
+            source_model.setData(source_index, "", Qt.EditRole)
+            self.clear_date_pressed = False
+
     def on_date_editor_changed(self, dateclicked):
         self.dateEditor_key_press = True
         self.datekeyPressed.emit(dateclicked)
+
+    def clear_calendar_date(self, dateclearclicked):
+        self.clear_date_pressed = True
+        self.cleardatekeyPressed.emit(dateclearclicked)
 
     # for finding matching date format string being used
     def find_matching_format(self, date_string, date_formats):
@@ -650,14 +692,13 @@ class CustomTableView(QTableView):
         self.horizontalScrollBar().rangeChanged.connect(self.update_sub_table_positions_timer)
         self.horizontalHeader().sectionResized.connect(self.update_sub_table_positions_timer)
 
-        if self.add_mainrow_option or self.del_mainrow_option:
-            vheader = self.verticalHeader()
-            vheader.setContextMenuPolicy(Qt.CustomContextMenu)
-            vheader.customContextMenuRequested.connect(self.show_context_menu)
+        vheader = self.verticalHeader()
+        vheader.setContextMenuPolicy(Qt.CustomContextMenu)
+        vheader.customContextMenuRequested.connect(self.show_context_menu)
 
-            hheader = self.horizontalHeader()
-            hheader.setContextMenuPolicy(Qt.CustomContextMenu)
-            hheader.customContextMenuRequested.connect(self.show_context_menu)
+        hheader = self.horizontalHeader()
+        hheader.setContextMenuPolicy(Qt.CustomContextMenu)
+        hheader.customContextMenuRequested.connect(self.show_context_menu)
 
         # Apply styles directly to QTableView
         # Apply style to hide the frame
@@ -726,8 +767,90 @@ class CustomTableView(QTableView):
             add.triggered.connect(lambda: self.addMainRowMsg(index))
             menu.addAction(add)
 
+        if self.del_mainrow_option or self.add_mainrow_option:
+            menu.addSeparator()
+
+        export = QAction(f"Export", self)
+        export.triggered.connect(self.export_table)
+        menu.addAction(export)
+
         # Show the context menu at the specified position
         menu.exec_(self.mapToGlobal(position))
+
+    # outputs transformed data table list for export
+    def export_table_getCheckboxes(self, data: List[str]) -> List[str]:
+        # checkbox data isn't saved to the main table data in the qabstracttablemodel in my program, so
+        # i need to transfer that data into the main table data before exporting
+        delegate = self.itemDelegate()
+        checked_rows = delegate.checked_indexes_rows
+
+        # take checked items and make the corresponding table data with "True" to represent they are checked
+        if checked_rows != None:
+            for key, values in checked_rows.items():
+                for value in values:
+                    data[value][key] = "True"
+
+        return data
+
+    def export_table_visible_only(self, data: List[str], headers: List[str]) -> [List[str], List[str]]:
+        # Get visible rows
+        visible_rows = [self.proxy_model.mapToSource(self.proxy_model.index(row, 0)).row() for row in
+                        range(self.proxy_model.rowCount())]
+
+        # Get visible columns
+        visible_columns = [self.proxy_model.mapToSource(self.proxy_model.index(0, col)).column() for col in
+                           range(self.proxy_model.columnCount())]
+
+        if self.expandable_rows:
+            visible_columns = visible_columns[1:]
+            visible_columns = [x - 1 for x in visible_columns]
+
+        visible_data_to_export = []
+
+        for index, row in enumerate(data):
+            # filter out rows
+            if index in visible_rows:
+                # removes the columns if any columns filtered out
+                # this is for future functionality as my program can't filter rows at the moment
+                visible_row_data = [row[i] for i in visible_columns]
+                visible_data_to_export.append(visible_row_data)
+
+        visible_headers = [headers[i] for i in visible_columns]
+
+        return visible_data_to_export, visible_headers
+
+    def export_table(self):
+        options = QFileDialog.Options()
+        file_name, _ = QFileDialog.getSaveFileName(self, "Save Excel File", "", "Excel Files (*.xlsx);;All Files (*)",
+                                                   options=options)
+
+        if file_name:
+            try:
+                if self.expandable_rows:
+                    columns = self.model.column_headers[1:]
+                else:
+                    columns = self.model.column_headers
+
+                data = self.model.table_data.copy()
+                data = self.export_table_getCheckboxes(data)
+                data, columns = self.export_table_visible_only(data, columns)
+
+                print(columns)
+
+                df = pd.DataFrame(data, columns=columns)
+                df.to_excel(file_name, index=False)
+
+                self.error_message_table("File Saved!", "Saved")
+            except:
+                self.error_message_table("ERROR, Couldn't save file!", "ERROR")
+
+    def error_message_table(self, msg, title):
+        msgBox = QMessageBox()
+        msgBox.setIcon(QMessageBox.Information)
+        msgBox.setText(msg)
+        msgBox.setWindowTitle(title)
+        msgBox.setStandardButtons(QMessageBox.Ok)
+        msgBox.exec_()
 
     # a print check to see whether columns integers picked for these arguments passed are the same, AS THIS WILL CAUSE A CRASH
     def column_arguments_same(self):
@@ -1043,6 +1166,7 @@ class CustomTableView(QTableView):
         button_delegate.oneditorStarted.connect(self.update_vertical_header_arrow_and_editor)
         button_delegate.keyPressed.connect(self.handleLineEditKeyPress)
         button_delegate.datekeyPressed.connect(self.handleDateeditKeyPress)
+        button_delegate.cleardatekeyPressed.connect(self.handleDateeditKeyPress)
 
         self.setItemDelegate(button_delegate)
 
@@ -2148,7 +2272,7 @@ class LazyDataViewer(QMainWindow):
         self.frame = myframe()
         self.model = LazyDataModel(data, columns_with_checkboxes, column_headers, expandable_rows)
         self.table_view = CustomTableView(self.app, self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data,
-                                          editable_columns=None, parent=self.frame, datetime_columns=None,
+                                          editable_columns=None, parent=self.frame, datetime_columns=[7],
                                           footer=True, footer_values=footer_values, subtable_col_checkboxes=sub_table_columns_with_checkboxes,
                                           subtable_header_labels=sub_table_headers_labels, expandable_rows=expandable_rows,
                                           add_mainrow_option=True, del_mainrow_option=True, add_subrow_option=True, del_subrow_option=True,
