@@ -8,7 +8,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-<b>Features that this currently has as of 3/5/2024:</b>
+<b>Features that this currently has as of 3/7/2024:</b>
 
 1) Sorting
 2) Column Sections are movable
