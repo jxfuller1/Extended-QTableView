@@ -43,10 +43,12 @@ Because of this implementation with custom views/models/delegates it will remain
 
 3) Add clear function to Qtableview if user clears table to populate table with new data. The clear function will make sure all necessary variables get
    safely reset
+   <ul> After some testing on this, i need to restructure the code a bit to make the table re-usable so that the user can clear it and re-populate... this 
+   will take a little bit of time.</ul>
 
-4) Need to do some additional testing with the various options to squash bugs
+5) Need to do some additional testing with the various options to squash bugs
    
-5) Make documentation for the use of this
+6) Make documentation for the use of this
 
    
 Header drop down filters and sub-tables for each row:
