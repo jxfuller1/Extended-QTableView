@@ -47,8 +47,9 @@ Because of this implementation with custom views/models/delegates it will remain
    will take a little bit of time.</ul>
 
 5) Need to do some additional testing with the various options to squash bugs
+   <ul>Current known bug is that the filter comboboxes lose position when the table is horizontally scrolled</ul>
    
-6) Make documentation for the use of this
+7) Make documentation for the use of this
 
    
 Header drop down filters and sub-tables for each row:
