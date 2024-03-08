@@ -495,11 +495,19 @@ class HiddenRowsProxyModel(QSortFilterProxyModel):
 class LazyDataModel(QAbstractTableModel):
     sql_value_change = pyqtSignal(int, int, str)
 
-    def __init__(self, data, columns_with_checkboxes, column_headers, expandable_rows):
+    def __init__(self, data: List[str] = None, columns_with_checkboxes: List[int] = None,
+                 column_headers: List[str] = None, expandable_rows: bool = False):
         super().__init__()
 
-        self.table_data = data
-        self.column_headers = column_headers
+        if not data:
+            self.table_data = []
+        else:
+            self.table_data = data
+
+        if not column_headers:
+            self.column_headers = []
+        else:
+            self.column_headers = column_headers
 
         self.checkbox_indexes = columns_with_checkboxes
         self.row_clicked = -1
@@ -513,15 +521,20 @@ class LazyDataModel(QAbstractTableModel):
         self.font.setBold(True)
         self.font.setPointSize(8)  # Set the desired font size
 
+    def update_headers(self, new_column_headers):
+        self.beginResetModel()
+        self.column_headers = new_column_headers
+        self.endResetModel()
+
     def rowCount(self, parent=None):
         return len(self.table_data)
 
     def columnCount(self, parent=None):
         if self.expandable_rows:
-            total = len(self.table_data[0])+1
+            total = len(self.column_headers)
             return total
         else:
-            return len(self.table_data[0])
+            return len(self.column_headers)
 
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and index.column() >= 0 and self.checkbox_indexes and index.column() not in self.checkbox_indexes \
@@ -835,8 +848,6 @@ class CustomTableView(QTableView):
                 data = self.export_table_getCheckboxes(data)
                 data, columns = self.export_table_visible_only(data, columns)
 
-                print(columns)
-
                 df = pd.DataFrame(data, columns=columns)
                 df.to_excel(file_name, index=False)
 
@@ -878,15 +889,16 @@ class CustomTableView(QTableView):
         stylesheet = "background-color: lightgrey;"
         self.footer_widget.setStyleSheet(stylesheet)
 
-        # create footer lineedits
-        self.footer_row_items()
-        self.footer_item_update_positions()
+        if self.footer_values:
+            # create footer lineedits
+            self.footer_row_items()
+            self.footer_item_update_positions()
 
-        for i in self.footer_values:
-            self.setFooterValue(i)
+            for i in self.footer_values:
+                self.setFooterValue(i)
 
-        self.footer_position()
-        self.footer_widget.show()
+            self.footer_position()
+            self.footer_widget.show()
 
     # for adding row data numbers if float value
     def try_float(self, s):
@@ -1020,6 +1032,7 @@ class CustomTableView(QTableView):
         self.display_filter_update()
 
     def display_filter_position(self):
+        padding = 4
         # take into account vertical header width, as i want footer to overlay on top of vertical header
         vertical_header_width = self.verticalHeader().width()
 
@@ -1028,6 +1041,10 @@ class CustomTableView(QTableView):
 
         self.filter_widget.setFixedWidth(view_size.width()+vertical_header_width)
         self.filter_widget.setFixedHeight(self.filter_footer_margin_height)
+
+        self.filter_widget_combo.setGeometry(vertical_header_width, padding, 19, 20)
+        self.filter_clear_button.move(vertical_header_width * 2 + 4, padding + 3)
+        self.filter_widget_label.move(vertical_header_width * 3 + 10, padding + 3)
 
         self.filter_widget.move(view_position.x()-vertical_header_width, view_position.y()+view_size.height()+self.footer_height)
 
@@ -1365,6 +1382,8 @@ class CustomTableView(QTableView):
     # this is needed to due scroll bar changing before table changes so the widgets won't map to correct spots
     # introducing a timer delay fixes this
     def update_sub_table_positions_timer(self):
+        # update filter combobox positions (this is mainly due to horizontal scrollbar)
+        self.header.adjustPositions()
 
         sender = self.sender()
         if isinstance(sender, QHeaderView):
@@ -1796,6 +1815,42 @@ class CustomTableView(QTableView):
 
         self.sql_delrow_subtable.emit(row_selected, row)
 
+    def reset_table(self):
+        self.model.table_data = []
+        self.model.removeRows(0, self.model.rowCount())
+
+        self.proxy_model.invalidate()
+        # Reset the proxy model
+        self.proxy_model.setSourceModel(self.model)
+
+        # clear out delegate variables
+        delegate = self.itemDelegate()
+        if delegate.checked_indexes_rows:
+            for key, values in delegate.checked_indexes_rows.items():
+                delegate.checked_indexes_rows[key] = []
+
+            delegate.expanded_rows.clear()
+
+        # clear out proxy model variables
+        self.proxy_model.filter_dict.clear()
+        self.proxy_model.filter_checked_rows.clear()
+        self.proxy_model.cust_sort_order.clear()
+
+        # empty out combobox filter dropdowns
+        self.header.populate_filter_dropdown()
+
+        # reset footer values
+        if self.footer_show and self.footer_values:
+            for i in self.footer_values:
+                self.setFooterValue(i)
+
+        # clear out any subtable data
+        if self.sub_table_data:
+            self.sub_table_data.clear()
+            self.sub_table_widgets.clear()
+
+        self.reset()
+
 
 # for sub_table widget
 class mywidget(QWidget):
@@ -2192,13 +2247,19 @@ class LazyDataViewer(QMainWindow):
         self.sql_combo = QComboBox()
         self.sql_combo.addItem("For SQL tables to be added")
 
+        self.clear_button = QPushButton("clear")
+        self.clear_button.clicked.connect(self.clear_out)
+
         self.main_horizontal.addStretch()
         self.main_horizontal.addWidget(self.sql_combo)
+        self.main_horizontal.addWidget(self.clear_button)
         self.main_horizontal.addStretch()
 
         self.main_layout.addLayout(self.main_horizontal)
         self.main_widget.setLayout(self.main_layout)
 
+
+        """
         start = time.time()
 
         # index of editable columns
@@ -2227,7 +2288,7 @@ class LazyDataViewer(QMainWindow):
         # which columsn to have checkboxes in instead of text
         columns_with_checkboxes = [2, 3, 4, 5]
         sub_table_columns_with_checkboxes = [3]
-        expandable_rows = True
+        self.expandable_rows = False
 
         # checkbox data for the columns with checkboxes (this would be replaced by grabbing data from say a sql table)
         # this is just a setup for grabbing "data" for testing purposes
@@ -2258,6 +2319,8 @@ class LazyDataViewer(QMainWindow):
         for i in range(columns):
             column_headers.append(f"Column {i}")
 
+        self.columns_headers = column_headers
+
         sub_table_headers_labels = ["NCR No.", "Disposition", "Date", "Extra", "Completed"]
 
         footer_values = {1: "total", 4: "total", 6: "sum"}
@@ -2270,11 +2333,11 @@ class LazyDataViewer(QMainWindow):
         ### possible add a check to make sure editable columns, columns with checkboxes and datetime columns do not overlap
         ### with same integer numbers
         self.frame = myframe()
-        self.model = LazyDataModel(data, columns_with_checkboxes, column_headers, expandable_rows)
+        self.model = LazyDataModel(data, columns_with_checkboxes, column_headers, self.expandable_rows)
         self.table_view = CustomTableView(self.app, self.model, columns_with_checkboxes, checked_indexes_rows, sub_table_data,
                                           editable_columns=None, parent=self.frame, datetime_columns=[7],
                                           footer=True, footer_values=footer_values, subtable_col_checkboxes=sub_table_columns_with_checkboxes,
-                                          subtable_header_labels=sub_table_headers_labels, expandable_rows=expandable_rows,
+                                          subtable_header_labels=sub_table_headers_labels, expandable_rows=self.expandable_rows,
                                           add_mainrow_option=True, del_mainrow_option=True, add_subrow_option=True, del_subrow_option=True,
                                           subtable_datetime_columns=[2], dblclick_edit_only=False)
 
@@ -2284,6 +2347,38 @@ class LazyDataViewer(QMainWindow):
 
         end = time.time()
         print(end-start)
+        """
+
+        self.no_data_table_test()
+        self.table_test_column_headers()
+        self.table_test_new_data()
+
+
+    def no_data_table_test(self):
+        self.frame = myframe()
+        self.model = LazyDataModel()
+        self.table_view = CustomTableView(self.app, self.model, parent=self.frame)
+        self.main_layout.addWidget(self.frame)
+        self.setCentralWidget(self.main_widget)
+
+    def table_test_column_headers(self):
+        self.table_view.reset_table()
+        self.table_view.model.update_headers(["Column 1", "Column 2"])
+
+    def table_test_new_data(self):
+        test_data = [["a", "b"], ["c", "d"]]
+        self.table_view.model.beginResetModel()
+        self.table_view.model.table_data = test_data
+
+
+        print(self.table_view.model.table_data)
+
+        self.table_view.model.endResetModel()
+        self.table_view.header.populate_filter_dropdown()
+        self.table_view.resizeColumnsToContents()
+
+    def clear_out(self):
+        self.table_view.reset_table()
 
 
 class sub_TableWidget(QTableWidget):
@@ -3071,6 +3166,59 @@ class setup_table(QFrame):
         msgBox.setWindowTitle(title)
         msgBox.setStandardButtons(QMessageBox.Ok)
         msgBox.exec_()
+
+    def clear_table(self):
+        self.table_view.reset_table()
+
+    def repopulate_existing_table(self, maintable_data: List[str] = None, subtable_data: List[str] = None,
+                                maintable_sql_name: str = None, subtable_sql_name: str = None):
+        """
+        repopulate an existing table that has already been initialized, same column headers will be used.  Either provide
+        the lists or provide the new SQL table names, 1 or the other.
+
+        :param maintable_data:  If not using SQL, List of lists for each row
+        :param subtable_data:   If not using SQL, if using expandable rows, List of list of row lists for each row of the subtable( IE [[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]] this MUST contain at minimum the same number of lists as the number of rows in the main table data
+        :param maintable_sql_name:  if using SQL, provide table name
+        :param subtable_sql_name:  if using SQL and expandable rows, provide table name
+        :return:
+        """
+
+        if maintable_data:
+            self.maintable_data = maintable_data
+            self.update_table()
+
+            if subtable_data and self.expandable_rows:
+                self.sub_table_data = subtable_data
+            return
+
+
+        # UPDATE CHECKBOX ROWS INDEXES WHEN CHANGING MAINTABLE DATA
+        # update sub table data if expandable rows
+
+        # LOOK AT BREAKING UP EACH CHANGE TO SEPARATE FUNCTIONS FOR USER INSTEAD
+
+
+        if self.use_sql and maintable_sql_name:
+            self.sql_maintable_name = maintable_sql_name
+            self.returnSQL_maintable_data()
+            self.update_table()
+
+            #self.maintable_data = maintable_data
+            #self.checked_indexes_rows = checked_rows
+
+            if subtable_sql_name and self.expandable_rows:
+                self.sql_subtable_name = subtable_sql_name
+                self.returnSQL_subtable_data()
+
+                #self.sub_table_data = subtable_data
+
+            return
+
+    def update_table(self):
+        self.table_view.model.table_data = self.maintable_data
+        self.table_view.model.endResetModel()
+        self.table_view.header.populate_filter_dropdown()
+        self.table_view.resizeColumnsToContents()
 
 
 
