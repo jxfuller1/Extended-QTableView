@@ -8,7 +8,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-<b>Features that this currently has as of 3/7/2024:</b>
+<b>Features that this currently has as of 3/8/2024:</b>
 
 1) Sorting
 2) Column Sections are movable
@@ -42,13 +42,12 @@ Because of this implementation with custom views/models/delegates it will remain
    however this means the user has to pass down the qapplication to the qtableview.... which i don't want.
 
 3) Add clear function to Qtableview if user clears table to populate table with new data. The clear function will make sure all necessary variables get
-   safely reset
+   safely reset    <b> WIP, about 15% complete for this </b>
    <ul> After some testing on this, i need to restructure the code a bit to make the table re-usable so that the user can clear it and re-populate... this 
    will take a little bit of time.</ul>
    <ul> Looks like I'll need to also add in separate functions for each optionable item for the table so that the options can easily be changed afterwards</ul>
 
 5) Need to do some additional testing with the various options to squash bugs
-   <ul>Current known bug is that the filter comboboxes lose position when the table is horizontally scrolled</ul>
    
 7) Make documentation for the use of this
 
