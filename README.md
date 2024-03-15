@@ -46,7 +46,8 @@ Because of this implementation with custom views/models/delegates it will remain
    <ul> After some testing on this, i need to restructure the code a bit to make the table re-usable so that the user can clear it and re-populate... this 
    will take a little bit of time.</ul>
    <ul> Looks like I'll need to also add in separate functions for each optionable item for the table so that the options can easily be changed afterwards</ul>
-   <ul>---------------------  ----------------   <b> WIP, about 20-25% complete for step 3 in total, this is the real last major thing that needs to be completed </b></ul>
+   <ul>---------------------  ----------------   <b> WIP, about 20-25% complete for step 3 in total, this is the real last major thing that needs to be completed.  
+   switching SQL tables is /almost/ completely working and tested except, just need to get filters to persist when changing tables</b></ul>
 
 5) Need to do some additional testing with the various options to squash bugs
    
