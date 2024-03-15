@@ -177,7 +177,6 @@ class ButtonDelegate(QStyledItemDelegate):
                 button.state |= QStyle.State_Enabled
 
        #     button.state |= QStyle.State_Enabled
-
             if index.row() in self.checked_indexes_rows.get(index.column()):
                 button.state |= QStyle.State_On
             else:
@@ -522,6 +521,10 @@ class LazyDataModel(QAbstractTableModel):
         self.font.setPointSize(8)  # Set the desired font size
 
     def update_headers(self, new_column_headers):
+        # add header for column expansion if expandable rows added to table
+        if self.expandable_rows:
+            new_column_headers.insert(0, "")
+
         self.beginResetModel()
         self.column_headers = new_column_headers
         self.endResetModel()
@@ -531,10 +534,17 @@ class LazyDataModel(QAbstractTableModel):
 
     def columnCount(self, parent=None):
         if self.expandable_rows:
-            total = len(self.column_headers)
-            return total
+            if self.table_data:
+                columns = max([len(self.table_data[0])+1, len(self.column_headers)])
+                return columns
+            else:
+                return len(self.column_headers)
         else:
-            return len(self.column_headers)
+            if self.table_data:
+                columns = max([len(self.table_data[0]), len(self.column_headers)])
+                return columns
+            else:
+                return len(self.column_headers)
 
     def data(self, index, role=Qt.DisplayRole):
         if role == Qt.DisplayRole and index.column() >= 0 and self.checkbox_indexes and index.column() not in self.checkbox_indexes \
@@ -560,7 +570,10 @@ class LazyDataModel(QAbstractTableModel):
                 return "   "
 
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
-            return self.column_headers[section]
+            try:
+                return self.column_headers[section]
+            except:
+                return str(section)
 
         return None
 
@@ -934,14 +947,21 @@ class CustomTableView(QTableView):
         # total checked boxes, taking into account any removed via filters
         elif self.columns_with_checkboxes and column in self.columns_with_checkboxes:
             delegate = self.itemDelegate()
-            checked_rows = delegate.checked_indexes_rows[column]
 
-            visible_rows = [self.indexFromProxytoSource(row, column).row() for row in range(self.proxy_model.rowCount())]
-            non_visible_checked_rows = set(checked_rows) - set(visible_rows)
+            all_checked_rows = delegate.checked_indexes_rows
 
-            total = set(checked_rows) - non_visible_checked_rows
+            # check to make sure checked_indexes_rows dict has anything in it
+            if all_checked_rows:
+                checked_rows = delegate.checked_indexes_rows[column]
 
-            footer_edit.setText(str(len(total)))
+                visible_rows = [self.indexFromProxytoSource(row, column).row() for row in range(self.proxy_model.rowCount())]
+                non_visible_checked_rows = set(checked_rows) - set(visible_rows)
+
+                total = set(checked_rows) - non_visible_checked_rows
+
+                footer_edit.setText(str(len(total)))
+            else:
+                footer_edit.setText("0")
 
     def footer_row_items(self):
         for i in range(self.proxy_model.columnCount()):
@@ -1520,31 +1540,35 @@ class CustomTableView(QTableView):
             if isinstance(child_widget, QTableWidget):
                 table = child_widget
 
-        if table is not None and self.sub_table_data[sub_table_index] is not None:
-            rows = len(self.sub_table_data[sub_table_index])
-            # columns = len(self.sub_table_data[sub_table_index][0])
-            columns = len(self.subtable_header_labels)
+        if len(self.model.table_data) == len(self.sub_table_data):
+            if table is not None and self.sub_table_data[sub_table_index] is not None:
+                rows = len(self.sub_table_data[sub_table_index])
+                # columns = len(self.sub_table_data[sub_table_index][0])
+                columns = len(self.subtable_header_labels)
 
-            table.setRowCount(rows)
-            table.setColumnCount(columns)
+                table.setRowCount(rows)
+                table.setColumnCount(columns)
 
-            if self.subtable_header_labels:
-                table.setHorizontalHeaderLabels(self.subtable_header_labels)
+                if self.subtable_header_labels:
+                    table.setHorizontalHeaderLabels(self.subtable_header_labels)
 
-             # Populate with self.sub_table_data variabled
-            for row in range(rows):
-                table.setRowHeight(row, 18)
-                for col in range(columns):
-                    if self.subtable_col_checkboxes and col in self.subtable_col_checkboxes:
-                        widget = table.make_cell_checkbox()
-                        check_value = self.sub_table_data[sub_table_index][row][col]
-                        self.subtable_initial_checkbox_state(widget, check_value)
-                        table.setCellWidget(row, col, widget)
+                 # Populate with self.sub_table_data variabled
+                for row in range(rows):
+                    table.setRowHeight(row, 18)
+                    for col in range(columns):
+                        if self.subtable_col_checkboxes and col in self.subtable_col_checkboxes:
+                            widget = table.make_cell_checkbox()
+                            check_value = self.sub_table_data[sub_table_index][row][col]
+                            self.subtable_initial_checkbox_state(widget, check_value)
+                            table.setCellWidget(row, col, widget)
 
-                    else:
-                        item = QTableWidgetItem(self.sub_table_data[sub_table_index][row][col])
-                        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                        table.setItem(row, col, item)
+                        else:
+                            item = QTableWidgetItem(self.sub_table_data[sub_table_index][row][col])
+                            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                            table.setItem(row, col, item)
+        else:
+            self.error_message_table("ERROR, sub table data does not match the number of rows of the main table data "
+                                     "\n Cannot populate sub table!", "ERROR")
 
     def subtable_initial_checkbox_state(self, widget: QWidget, value: str):
         if widget:
@@ -1815,7 +1839,7 @@ class CustomTableView(QTableView):
 
         self.sql_delrow_subtable.emit(row_selected, row)
 
-    def reset_table(self):
+    def reset_table(self, keep_filter=False):
         self.model.table_data = []
         self.model.removeRows(0, self.model.rowCount())
 
@@ -1825,16 +1849,16 @@ class CustomTableView(QTableView):
 
         # clear out delegate variables
         delegate = self.itemDelegate()
+
         if delegate.checked_indexes_rows:
             for key, values in delegate.checked_indexes_rows.items():
                 delegate.checked_indexes_rows[key] = []
-
             delegate.expanded_rows.clear()
 
-        # clear out proxy model variables
-        self.proxy_model.filter_dict.clear()
-        self.proxy_model.filter_checked_rows.clear()
-        self.proxy_model.cust_sort_order.clear()
+        if not keep_filter:
+            self.proxy_model.filter_dict.clear()
+            self.proxy_model.filter_checked_rows.clear()
+            self.proxy_model.cust_sort_order.clear()
 
         # empty out combobox filter dropdowns
         self.header.populate_filter_dropdown()
@@ -2129,18 +2153,18 @@ class ButtonHeaderView(QHeaderView):
     # boxes have different base filtering options
     def combo_base_index(self, column: int) -> int:
         base_index = 4
+
         if self.parent().columns_with_checkboxes and column in self.parent().columns_with_checkboxes:
             base_index = 2
 
         return base_index
 
     def set_combo_column_filter_items(self, column: int, button: QComboBox, alter_already_set_filter: bool = False, altered_value: str = None):
-
-        base_index = self.combo_base_index(column)
+        visual_column = self.logicalIndex(column)
+        base_index = self.combo_base_index(visual_column)
 
         if not alter_already_set_filter:
             if base_index == 4:
-                visual_column = self.logicalIndex(column)
 
                 # this complicated list comprehensions gets all item values from given column
                 column_values = [(str(self.model().data(self.model().index(row, visual_column), Qt.DisplayRole)))
@@ -2208,6 +2232,43 @@ class ButtonHeaderView(QHeaderView):
         # padding to account for checkbox size and scrollbar
         padding = 40
         combo_box.view().setFixedWidth(min(max_width + scrollbar_width + frame_width + padding, max_dropdown_width))
+
+
+
+
+
+    def check_uncheck_filteritems_manually(self, column: int, value: str):
+
+        #visual_column = self.logicalIndex(column)
+
+        base_index = self.combo_base_index(column)
+
+        visual = self.visualIndex(column)
+        button = self.m_buttons_index_attachments[column]
+
+        items_list = [button.itemText(i) for i in range(button.count())]
+
+        print(items_list)
+        print(visual)
+
+        index = -1
+        if value in items_list:
+            index = items_list.index(value)
+            print(index)
+
+        if index != -1 and index > base_index:
+            print("test")
+            checkstate = button.itemData(index, Qt.CheckStateRole)
+            print(checkstate)
+
+
+      #  button.combo_dropdown_height(len(item_to_list) + base_index)
+       # self.adjustDropdownWidth(button)
+
+
+        # NEEDS TO PROPERLY UPDATE CHECKBOXES TO PERSIST FILTERS
+
+
 
 
 # custom qframe for tableview due to bug with widgets overlapping frame of tableview
@@ -2851,6 +2912,7 @@ class setup_table(QFrame):
         self.maintable_rowids = []
 
         self.maintable_df = None
+        self.indexes_adjusted = False
 
         # if using sql try to get the main table data from the SQL data base & sub table as a list of lists
         if self.use_sql:
@@ -2891,6 +2953,7 @@ class setup_table(QFrame):
         self.maintable_rowids = main_rowids
 
         if not isinstance(df, pd.DataFrame):
+            self.maintable_df = None
             print("ERROR, Couldn't read SQL main table!")
         else:
             self.maintable_df = df
@@ -2934,6 +2997,26 @@ class setup_table(QFrame):
         if self.footer and self.footer_value:
             modified_dict = {key + 1: value for key, value in self.footer_value.items()}
             self.footer_value = modified_dict
+
+        self.indexes_adjusted = True
+
+    def adjust_indexes_back_if_expandable_rows(self):
+        # adjust index back to indexes provided if expandable rows, this is for if modifying an existing table
+        if self.expandable_rows and self.columns_with_checkboxes:
+            self.columns_with_checkboxes = [x - 1 for x in self.columns_with_checkboxes]
+        if self.expandable_rows and self.checked_indexes_rows:
+            modified_dict = {key - 1: value for key, value in self.checked_indexes_rows.items()}
+            self.checked_indexes_rows = modified_dict
+        if self.expandable_rows and self.editable_columns:
+            self.editable_columns = [x - 1 for x in self.editable_columns]
+        if self.expandable_rows and self.datetime_columns:
+            self.datetime_columns = [x - 1 for x in self.datetime_columns]
+
+        if self.footer and self.footer_value:
+            modified_dict = {key - 1: value for key, value in self.footer_value.items()}
+            self.footer_value = modified_dict
+
+        self.indexes_adjusted = False
 
     def activate_table(self):
         # note have to send copy to lazydatamodel of the main table data, otherwise changes for the main table data
@@ -3167,59 +3250,118 @@ class setup_table(QFrame):
         msgBox.setStandardButtons(QMessageBox.Ok)
         msgBox.exec_()
 
-    def clear_table(self):
-        self.table_view.reset_table()
+    def clear_table(self, keep_filter=False):
+        self.table_view.reset_table(keep_filter)
 
-    def repopulate_existing_table(self, maintable_data: List[str] = None, subtable_data: List[str] = None,
-                                maintable_sql_name: str = None, subtable_sql_name: str = None):
-        """
-        repopulate an existing table that has already been initialized, same column headers will be used.  Either provide
-        the lists or provide the new SQL table names, 1 or the other.
+    def loadnew_maintable_sql(self, maintable_name: str, maintable_sql_path: str, maintable_query: str = None,
+                              subtable_sql_name: str = None, subtable_sql_path: str = None, subtable_headers: List[str] = None,
+                              subtable_query: str = None, keep_existing_filter=False):
 
-        :param maintable_data:  If not using SQL, List of lists for each row
-        :param subtable_data:   If not using SQL, if using expandable rows, List of list of row lists for each row of the subtable( IE [[[1, 2, 3], [4, 5, 6]], [[1, 2, 3], [4, 5, 6]]] this MUST contain at minimum the same number of lists as the number of rows in the main table data
-        :param maintable_sql_name:  if using SQL, provide table name
-        :param subtable_sql_name:  if using SQL and expandable rows, provide table name
-        :return:
-        """
+        # adjust indexes back if using expandable rows for the returnSQL_maintable_data function
+        if self.indexes_adjusted:
+            self.adjust_indexes_back_if_expandable_rows()
 
-        if maintable_data:
-            self.maintable_data = maintable_data
-            self.update_table()
+        # reset table in case user didn't reset it
+        self.clear_table(keep_filter=keep_existing_filter)
 
-            if subtable_data and self.expandable_rows:
-                self.sub_table_data = subtable_data
-            return
+        self.sql_maintable_name = maintable_name
+        self.sql_maintable_path = maintable_sql_path
+        self.sql_maintable_query = maintable_query
+
+        self.returnSQL_maintable_data()
+
+        # adjust indexes back if using expandable rows
+        if not self.indexes_adjusted and self.expandable_rows:
+            self.adjust_indexes_if_expandable_rows()
+
+        self.loadnew_checkboxed_rows(self.checked_indexes_rows)
+
+        # only load new headers if a new table was able to be loaded... if not then resetting headers would be a problem
+        if self.maintable_df is not None:
+            self.loadnew_headers(self.maintable_headers)
+
+        self.update_table()
+
+        # load new subtable if the option is chosen
+        if self.use_sql and self.expandable_rows:
+            if not subtable_sql_name or not subtable_sql_path or not subtable_headers:
+                print("ERROR, Must provide sub table information as 'Use SQL' is set to TRUE!")
+            else:
+                self.loadnew_subtable_sql(subtable_sql_name, subtable_sql_path, subtable_headers, subtable_query)
+
+        if keep_existing_filter:
+            self.table_view.proxy_model.setFilterData(self.table_view.filter_dict)
+
+            print(self.table_view.filter_dict)
+
+            for column, values in self.table_view.filter_dict.items():
+                for value in values:
+                    self.table_view.header.check_uncheck_filteritems_manually(column, value)
 
 
-        # UPDATE CHECKBOX ROWS INDEXES WHEN CHANGING MAINTABLE DATA
-        # update sub table data if expandable rows
-
-        # LOOK AT BREAKING UP EACH CHANGE TO SEPARATE FUNCTIONS FOR USER INSTEAD
 
 
-        if self.use_sql and maintable_sql_name:
-            self.sql_maintable_name = maintable_sql_name
-            self.returnSQL_maintable_data()
-            self.update_table()
 
-            #self.maintable_data = maintable_data
-            #self.checked_indexes_rows = checked_rows
 
-            if subtable_sql_name and self.expandable_rows:
-                self.sql_subtable_name = subtable_sql_name
-                self.returnSQL_subtable_data()
 
-                #self.sub_table_data = subtable_data
+    def loadnew_maintable_list(self, maintable_data: List[str], keep_existing_filter=False):
+        self.clear_table(keep_filter=keep_existing_filter)
+        self.maintable_data = maintable_data
+        self.update_table()
 
-            return
+        if keep_existing_filter:
+            self.table_view.proxy_model.setFilterData(self.table_view.filter_dict)
+
+    def loadnew_subtable_list(self, subtable_data: List[str]):
+        if subtable_data and self.expandable_rows:
+            self.sub_table_data = subtable_data
+            self.table_view.sub_table_data = subtable_data
+
+    def loadnew_subtable_sql(self, subtable_sql_name: str, subtable_sql_path: str, subtable_headers: List[str],
+                             subtable_query: str = None):
+
+        self.sql_subtable_name = subtable_sql_name
+        self.sql_subtable_path = subtable_sql_path
+        self.sub_table_headers_labels = subtable_headers
+        self.sql_subtable_query = subtable_query
+
+        if self.use_sql and self.expandable_rows:
+            self.returnSQL_subtable_data()
+            self.table_view.sub_table_data = self.sub_table_data
+
+    def loadnew_checkboxed_rows(self, checked_rows: Union[Dict[int, int], None]):
+        if checked_rows:
+            # clear out delegate variables
+            delegate = self.table_view.itemDelegate()
+            delegate.checked_indexes_rows = checked_rows
+
+    def loadnew_headers(self, headers: List[str]):
+        self.model.update_headers(headers)
 
     def update_table(self):
+        self.table_view.model.beginResetModel()
         self.table_view.model.table_data = self.maintable_data
         self.table_view.model.endResetModel()
         self.table_view.header.populate_filter_dropdown()
-        self.table_view.resizeColumnsToContents()
 
+        # reset/clear the subtable_data variable in the table_view when changing the table maintable_data
+        # so that the number of indexes matches the new rows
+        if self.expandable_rows:
+            subtable_list = []
+            for row in self.maintable_data:
+                subtable_list.append([])
+            self.table_view.sub_table_data = subtable_list
+
+        if self.footer and self.footer_value:
+            for i in self.footer_value:
+                self.table_view.setFooterValue(i)
+
+    def update_using_sql(self, value: bool):
+        self.use_sql = value
+
+    # NEED TO ADJUST THIS FUNCION SO IT UPDATES STUFF IF THIS VALUE GETS CHANGED
+    def update_using_expandable_rows(self, value: bool):
+        self.expandable_rows = value
 
 
 if __name__ == "__main__":
