@@ -668,6 +668,7 @@ class CustomTableView(QTableView):
         self.footer_show = footer
         self.footer_row_boxes = []
         self.footer_values = footer_values
+        self.footer_widget = None
 
         self.footer_height = 0
         if footer:
@@ -974,6 +975,8 @@ class CustomTableView(QTableView):
 
             if i not in self.footer_values.keys():
                 line.hide()
+            else:
+                line.show()
 
     def footer_item_update_positions(self):
         if self.footer_show:
@@ -986,12 +989,27 @@ class CustomTableView(QTableView):
             for i in range(self.proxy_model.columnCount()):
                 try:
                     edit_box = self.footer_row_boxes[logical_indices[i]]
+                    col_x = self.header.sectionViewportPosition(logical_indices[i])
+                    col_width = self.header.sectionSize(logical_indices[i])
+
+                    edit_box.setGeometry(col_x + padding + x, padding, col_width-padding-padding,
+                                         self.footer_height-padding-padding)
+
+                except:
+                    print("ERROR index of proxy_model outside of footer_row_boxes variable")
+
+            # below is old code, keeping for a little bit just in case
+            """
+            for i in range(self.proxy_model.columnCount()):
+                try:
+                    edit_box = self.footer_row_boxes[logical_indices[i]]
                     proxy_width = self.columnWidth(logical_indices[i])
 
                     edit_box.setGeometry(x+padding, padding, proxy_width-padding-padding,  self.footer_height-padding-padding)
                     x += proxy_width
                 except:
                     print("ERROR index of proxy_model outside of footer_row_boxes variable")
+            """
 
     def footer_position(self):
         # take into account vertical header width, as i want footer to overlay on top of vertical header
@@ -1408,9 +1426,8 @@ class CustomTableView(QTableView):
         # update filter combobox positions (this is mainly due to horizontal scrollbar)
         self.header.adjustPositions()
 
-        sender = self.sender()
-        if isinstance(sender, QHeaderView):
-            self.footer_item_update_positions()
+        # update filter combobox positions (this is mainly due to horizontal scrollbar)
+        self.footer_item_update_positions()
 
         # note have to check viewport margins here on scrollbar changes on loadup of window or it won't show at startup
         if self.viewportMargins().bottom() != self.viewport_bottom_margin:
@@ -2918,6 +2935,7 @@ class setup_table(QFrame):
 
         self.maintable_df = None
         self.indexes_adjusted = False
+        self.headers_adjusted = False
 
         # if using sql try to get the main table data from the SQL data base & sub table as a list of lists
         if self.use_sql:
@@ -3044,6 +3062,10 @@ class setup_table(QFrame):
         self.table_view.sql_addrow_subtable.connect(self.sql_subtable_addrow)
         self.table_view.sql_delrow_subtable.connect(self.sql_subtable_delrow)
         self.table_view.sql_update_subtable.connect(self.sql_subtable_updaterow)
+
+        # variable needed for changing expansion_row states after table creation and adjusting headers accordingly
+        if self.expandable_rows:
+            self.headers_adjusted = True
 
     def resizeEvent(self, event):
         # Handle the resize event of the QFrame
@@ -3398,17 +3420,27 @@ class setup_table(QFrame):
                         self.table_view.datetime_columns = self.datetime_columns
                         delegate.datetime_columns = self.datetime_columns
 
-                    # remake footers to update their positions
+
+                    # delete and remake footer
                     if self.footer_value:
                         self.table_view.footer_values = self.footer_value
-                        self.table_view.footer_row_boxes.clear()
+                        if self.table_view.footer_row_boxes:
+                            for lineedit in self.table_view.footer_row_boxes:
+                                lineedit.deleteLater()
+
+                            self.table_view.footer_row_boxes.clear()
+
+                        if self.table_view.footer_widget is not None:
+                            self.table_view.footer_widget.deleteLater()
+
                         self.table_view.footer()
 
                     # delete the "" that was inserted into column headers to account for expanded rows
                     try:
-                        if self.indexes_adjusted:
+                        if self.headers_adjusted:
                             headers = self.model.column_headers[1:]
                             self.loadnew_headers(headers)
+                            self.headers_adjusted = False
                     except:
                         pass
 
@@ -3439,18 +3471,27 @@ class setup_table(QFrame):
                         self.table_view.datetime_columns = self.datetime_columns
                         delegate.datetime_columns = self.datetime_columns
 
-                    # remake footers to update their positions
+                    # delete and remake footer
                     if self.footer_value:
                         self.table_view.footer_values = self.footer_value
-                        self.table_view.footer_row_boxes.clear()
+                        if self.table_view.footer_row_boxes:
+                            for lineedit in self.table_view.footer_row_boxes:
+                                lineedit.deleteLater()
+
+                            self.table_view.footer_row_boxes.clear()
+
+                        if self.table_view.footer_widget is not None:
+                            self.table_view.footer_widget.deleteLater()
+
                         self.table_view.footer()
 
                     try:
                         # loadnew_headers calls the update_headers function in the qabstracttablemodel which
                         # automatically makes adjustements for the column headers if expandable_rows is set to True
-                        if not self.indexes_adjusted:
+                        if not self.headers_adjusted:
                             headers = self.model.column_headers
                             self.loadnew_headers(headers)
+                            self.headers_adjusted = True
                     except:
                         pass
 
