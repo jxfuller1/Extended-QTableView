@@ -8,7 +8,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-<b>Features that this currently has as of 3/20/2024:</b>
+<b>Features that this currently has as of 3/26/2024:</b>
 
 1) Sorting
 2) Column Sections are movable
@@ -46,9 +46,8 @@ Because of this implementation with custom views/models/delegates it will remain
    <ul> After some testing on this, i need to restructure the code a bit to make the table re-usable so that the user can clear it and re-populate... this 
    will take a little bit of time.</ul>
    <ul> Looks like I'll need to also add in separate functions for each optionable item for the table so that the options can easily be changed afterwards</ul>
-   <ul>---------------------  ----------------   <b> WIP, about 50% complete for step 3 in total.  The hardest parts of this are now coded, user can now
-   dynamically load new tables even with SQL tables and dynamically change other settings like headers/expansion rows.  I just need to add in functions
-   for dynamically change the rest of the table options.  The remaining ones should be easier.</b></ul>
+   <ul>---------------------  ----------------   <b> WIP, about 85% complete for step 3 in total.  This is basically done, i just need to do some testing
+   when switching between different options to work out any bugs/kinks</b></ul>
 
 5) Need to do some additional testing with the various options to squash bugs
    
