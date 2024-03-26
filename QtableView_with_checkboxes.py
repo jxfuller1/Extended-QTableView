@@ -551,9 +551,15 @@ class LazyDataModel(QAbstractTableModel):
                 or role == Qt.DisplayRole and index.column() >= 0 and not self.checkbox_indexes:
             # -1 on the column to account for the expansion column
             if self.expandable_rows:
-                row_value = self.table_data[index.row()][index.column()-1]
+                try:
+                    row_value = self.table_data[index.row()][index.column()-1]
+                except:
+                    return None
             else:
-                row_value = self.table_data[index.row()][index.column()]
+                try:
+                    row_value = self.table_data[index.row()][index.column()]
+                except:
+                    return None
             return row_value
         elif role == Qt.EditRole:
             return False
@@ -594,9 +600,15 @@ class LazyDataModel(QAbstractTableModel):
         if role == Qt.EditRole:
             # -1 on the column to account for the expansion column, set new value if value changed in cell
             if self.expandable_rows:
-                get_value = self.table_data[index.row()][index.column()-1]
+                try:
+                    get_value = self.table_data[index.row()][index.column()-1]
+                except:
+                    return False
             else:
-                get_value = self.table_data[index.row()][index.column()]
+                try:
+                    get_value = self.table_data[index.row()][index.column()]
+                except:
+                    return False
 
             if value != get_value:
                 if self.expandable_rows:
@@ -701,8 +713,7 @@ class CustomTableView(QTableView):
 
         self.setDelegates()
         self.setEditTriggers(QAbstractItemView.CurrentChanged)
-        if self.dblclick_edit_only:
-            self.doubleClicked.connect(self.doubleclick_tableChange)
+        self.doubleClicked.connect(self.doubleclick_tableChange)
         self.vertical_header_setup()
         self.horizontal_header_setup()
 
@@ -747,33 +758,34 @@ class CustomTableView(QTableView):
             self.setColumnWidth(0, 20)
 
     def doubleclick_tableChange(self, index, line_edit: QLineEdit = None):
-        header_labels = []
-        for i in range(self.model.columnCount()):
-            header_labels.append(self.model.headerData(i, Qt.Horizontal, Qt.DisplayRole))
+        if self.dblclick_edit_only:
+            header_labels = []
+            for i in range(self.model.columnCount()):
+                header_labels.append(self.model.headerData(i, Qt.Horizontal, Qt.DisplayRole))
 
-        if not line_edit:
-            source_index = self.indexFromProxytoSource(index.row(), index.column())
-        else:
-            source_index = index
+            if not line_edit:
+                source_index = self.indexFromProxytoSource(index.row(), index.column())
+            else:
+                source_index = index
 
-        row_data = self.model.table_data[source_index.row()]
-        title = "Modify row data"
+            row_data = self.model.table_data[source_index.row()]
+            title = "Modify row data"
 
-        checked_row_items = None
-        if self.columns_with_checkboxes:
-            checked_row_items = []
-            delegate = self.itemDelegate()
-            for key, value in delegate.checked_indexes_rows.items():
-                if index.row() in value:
-                    checked_row_items.append("TRUE")
-                else:
-                    checked_row_items.append("")
+            checked_row_items = None
+            if self.columns_with_checkboxes:
+                checked_row_items = []
+                delegate = self.itemDelegate()
+                for key, value in delegate.checked_indexes_rows.items():
+                    if index.row() in value:
+                        checked_row_items.append("TRUE")
+                    else:
+                        checked_row_items.append("")
 
-        self.row_dialog = addRowMaintable_window(self, self.model.columnCount(), self.columns_with_checkboxes,
-                                                 self.datetime_columns, self.expandable_rows, header_labels, title,
-                                                 row_data, checked_row_items, source_index.row())
-        self.row_dialog.onexistingRowChanged.connect(self.addMainRowUpdate)
-        self.row_dialog.exec()
+            self.row_dialog = addRowMaintable_window(self, self.model.columnCount(), self.columns_with_checkboxes,
+                                                     self.datetime_columns, self.expandable_rows, header_labels, title,
+                                                     row_data, checked_row_items, source_index.row())
+            self.row_dialog.onexistingRowChanged.connect(self.addMainRowUpdate)
+            self.row_dialog.exec()
 
     def show_context_menu(self, position):
         vertical_header = self.verticalHeader()
@@ -2209,10 +2221,13 @@ class ButtonHeaderView(QHeaderView):
                         table_column = visual_column-1
                         column_values = [row[table_column] for row in source_model.table_data]
                 else:
-                    column_values = [row[visual_column] for row in source_model.table_data]
+                    try:
+                        column_values = [row[visual_column] for row in source_model.table_data]
+                    except:
+                        column_values = None
 
                 if column_values:
-                    remove_blanks = [item for item in column_values if item != ""]
+                    remove_blanks = [str(item) for item in column_values if item != ""]
 
                     # change to set to remove duplicates
                     items = set(remove_blanks)
@@ -2949,7 +2964,8 @@ class setup_table(QFrame):
         if data_provided_check and self.maintable_data:
             if self.expandable_rows:
                 self.adjust_indexes_if_expandable_rows()
-            self.activate_table()
+
+        self.activate_table()
 
     def returnSQL_subtable_data(self):
         allsub_tables = SQL_table.sql_tables(self.sql_subtable_path)
@@ -3044,9 +3060,13 @@ class setup_table(QFrame):
     def activate_table(self):
         # note have to send copy to lazydatamodel of the main table data, otherwise changes for the main table data
         # will affect the variable in this class
-        self.model_data = self.maintable_data.copy()
+        if self.maintable_data is not None:
+            self.model_data = self.maintable_data.copy()
+        else:
+            self.model_data = None
 
         self.model = LazyDataModel(self.model_data, self.columns_with_checkboxes, self.maintable_headers, self.expandable_rows)
+
         self.model.sql_value_change.connect(self.sql_maintable_value_change)
         self.table_view = CustomTableView(self.app, self.model, self.columns_with_checkboxes, self.checked_indexes_rows, self.sub_table_data,
                                           editable_columns=self.editable_columns, parent=self, datetime_columns=self.datetime_columns,
@@ -3317,10 +3337,22 @@ class setup_table(QFrame):
             else:
                 self.loadnew_subtable_sql(subtable_sql_name, subtable_sql_path, subtable_headers, subtable_query)
 
+        # resize due to display issues with vertical headers if there are no initial rows in the table
+        self.resize(self.width() + 1, self.height())
+        self.resize(self.width() - 1, self.height())
+
     def loadnew_maintable_list(self, maintable_data: List[str], keep_existing_filter=False):
-        self.clear_table(keep_filter=keep_existing_filter)
+        """
+        :param maintable_data:  List of lists, where each list represents ROW data (not column data)
+        :param keep_existing_filter: whether to keep existing filters if some filters are set, when loading a new table data
+        """
         self.maintable_data = maintable_data
+        self.clear_table(keep_filter=keep_existing_filter)
         self.update_table()
+
+        # resize due to display issues with vertical headers if there are no initial rows in the table
+        self.resize(self.width()+1, self.height())
+        self.resize(self.width()-1, self.height())
 
     def loadnew_subtable_list(self, subtable_data: List[str]):
         if subtable_data and self.table_view is not None:
@@ -3340,14 +3372,140 @@ class setup_table(QFrame):
             self.table_view.sub_table_data = self.sub_table_data
 
     def loadnew_checkboxed_rows(self, checked_rows: Union[Dict[int, int], None]):
+        """
+        Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
+        """
+        self.checked_indexes_rows = checked_rows
+
         if checked_rows and self.table_view is not None:
-            # clear out delegate variables
+            # change delegate variable
             delegate = self.table_view.itemDelegate()
             delegate.checked_indexes_rows = checked_rows
+            self.table_view.checked_indexes_rows = checked_rows
+
+            self.table_view.reset()
+
+    def loadnew_columns_with_checkboxes(self, columns_with_checkboxes: List[int]):
+        """
+        Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
+        """
+        self.columns_with_checkboxes = columns_with_checkboxes
+
+        if self.table_view is not None:
+            delegate = self.table_view.itemDelegate()
+            delegate.checked_indexed_columns = self.columns_with_checkboxes
+
+            self.table_view.columns_with_checkboxes = self.columns_with_checkboxes
+            self.model.checkbox_indexes = self.columns_with_checkboxes
+
+            self.table_view.reset()
+
+    def loadnew_edible_columns(self, editable_columns: List[int]):
+        """
+        Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
+        """
+        self.editable_columns = editable_columns
+
+        if self.table_view is not None:
+            self.table_view.editable_columns = self.editable_columns
+            delegate = self.table_view.itemDelegate()
+            delegate.editable_columns = self.editable_columns
+
+    def loadnew_datetime_columns(self, datetime_columns: List[int]):
+        """
+        Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
+        """
+        self.datetime_columns = datetime_columns
+
+        if self.table_view is not None:
+            self.table_view.datetime_columns = self.datetime_columns
+            delegate = self.table_view.itemDelegate()
+            delegate.datetime_columns = self.datetime_columns
+
+    def loadnew_footervalues(self, footer_values: Dict[int, str]):
+        """
+        Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
+        """
+        self.footer_value = footer_values
+
+        if self.table_view is not None:
+            # delete and remake footer
+            self.table_view.footer_values = self.footer_value
+            if self.table_view.footer_row_boxes:
+                for lineedit in self.table_view.footer_row_boxes:
+                    lineedit.deleteLater()
+
+                self.table_view.footer_row_boxes.clear()
+
+            if self.table_view.footer_widget is not None:
+                self.table_view.footer_widget.deleteLater()
+
+            self.table_view.footer()
+
+    def loadnew_subtable_headers(self, subtable_headers: List[str]):
+        self.sub_table_headers_labels = subtable_headers
+
+        if self.table_view is not None:
+            self.table_view.subtable_header_labels = subtable_headers
+
+    def loadnew_subtable_col_checkboxes(self, subtable_col_checkboxes: List[int]):
+        self.subtable_col_checkboxes = subtable_col_checkboxes
+
+        if self.table_view is not None:
+            self.table_view.subtable_col_checkboxes = subtable_col_checkboxes
+
+    def update_add_mainrow_option(self, add_mainrow_option: bool):
+        self.add_mainrow_option = add_mainrow_option
+
+        if self.table_view is not None:
+            self.table_view.add_mainrow_option = add_mainrow_option
+
+    def update_del_mainrow_option(self, del_mainrow_option: bool):
+        self.del_mainrow_option = del_mainrow_option
+
+        if self.table_view is not None:
+            self.table_view.del_mainrow_option = del_mainrow_option
+
+    def update_add_subrow_option(self, add_subrow_option: bool):
+        self.add_subrow_option = add_subrow_option
+
+        if self.table_view is not None:
+            self.table_view.add_subrow_option = add_subrow_option
+
+    def update_del_subrow_option(self, del_subrow_option: bool):
+        self.del_subrow_option = del_subrow_option
+
+        if self.table_view is not None:
+            self.table_view.del_subrow_option = del_subrow_option
+
+    def loadnew_subtable_datetime(self, subtable_datetime_columns: List[int]):
+        self.subtable_datetime_columns = subtable_datetime_columns
+
+        if self.table_view is not None:
+            self.table_view.subtable_datetime_columns = subtable_datetime_columns
+
+    def update_dblclick_edit_only(self, dblclick_edit_only: bool):
+        self.dblclick_edit_only = dblclick_edit_only
+
+        if self.table_view is not None:
+            self.table_view.dblclick_edit_only = dblclick_edit_only
+
+            delegate = self.table_view.itemDelegate()
+            delegate.dblclick_edit_only = dblclick_edit_only
+
+    def useFooter(self, footer: bool):
+        self.footer = footer
+
+        if self.table_view is not None:
+            self.table_view.footer_show = footer
+
+            if footer:
+                self.table_view.footer_height = 25
+            else:
+                self.table_view.footer_height = 0
 
     def loadnew_headers(self, headers: List[str]):
-        if self.model is not None:
-            self.model.update_headers(headers)
+        self.model.update_headers(headers)
 
     def update_table(self):
         if self.table_view is not None:
@@ -3419,7 +3577,6 @@ class setup_table(QFrame):
                     if self.datetime_columns:
                         self.table_view.datetime_columns = self.datetime_columns
                         delegate.datetime_columns = self.datetime_columns
-
 
                     # delete and remake footer
                     if self.footer_value:
@@ -3496,6 +3653,7 @@ class setup_table(QFrame):
                         pass
 
             self.table_view.model.endResetModel()
+
 
 
 
