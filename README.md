@@ -8,7 +8,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-<b>Features that this currently has as of 3/26/2024:</b>
+<b>Features that this currently has as of 3/27/2024:</b>
 
 1) Sorting
 2) Column Sections are movable
@@ -29,29 +29,19 @@ Because of this implementation with custom views/models/delegates it will remain
     <ul>c) supports only using Sqlite3.</ul>
     <ul>d) The way this is written, won't cause issues with multiple people making changes at the same time.</ul>
 15) Export visible rows to Excel
-    
+16) Functions added for safely clearing table and safely being able to dynamically changing table settings, including
+    switching back and forth between using SQL or not.
 
 
-
-<b>Items left to finish:</b>
+<b>Items left to finish:  ALMOST ALL FINISHED, YAY!!!</b>
    
 1) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
    with current implementation... it's just a little visual indicator anyway.
    
 2) Remove code for custom combobox filter dropdown locations, this uses the qapplication from pyqt5 to remove the default animations for the comboboxes,
    however this means the user has to pass down the qapplication to the qtableview.... which i don't want.
-
-3) Add clear function to Qtableview if user clears table to populate table with new data. The clear function will make sure all necessary variables get
-   safely reset  
-   <ul> After some testing on this, i need to restructure the code a bit to make the table re-usable so that the user can clear it and re-populate... this 
-   will take a little bit of time.</ul>
-   <ul> Looks like I'll need to also add in separate functions for each optionable item for the table so that the options can easily be changed afterwards</ul>
-   <ul>---------------------  ----------------   <b> WIP, about 85% complete for step 3 in total.  This is basically done, i just need to do some testing
-   when switching between different options to work out any bugs/kinks</b></ul>
-
-5) Need to do some additional testing with the various options to squash bugs
    
-7) Make documentation for the use of this
+3) Make documentation for the use of this
 
    
 Header drop down filters and sub-tables for each row:
