@@ -177,7 +177,8 @@ class ButtonDelegate(QStyledItemDelegate):
                 button.state |= QStyle.State_Enabled
 
        #     button.state |= QStyle.State_Enabled
-            if index.row() in self.checked_indexes_rows.get(index.column()):
+
+            if self.checked_indexes_rows and index.row() in self.checked_indexes_rows.get(index.column()):
                 button.state |= QStyle.State_On
             else:
                 button.state |= QStyle.State_Off
@@ -286,7 +287,7 @@ class ButtonDelegate(QStyledItemDelegate):
 
         elif column in self.checked_indexed_columns and not self.dblclick_edit_only:
             if self.last_press_index == self.last_release_index:
-                if row in self.checked_indexes_rows.get(column):
+                if self.checked_indexes_rows and row in self.checked_indexes_rows.get(column):
                     self.checked_indexes_rows[column].remove(row)
 
                     # emit to update proxy filter that checkbox states changed and update footer number and update SQL if
@@ -2219,8 +2220,14 @@ class ButtonHeaderView(QHeaderView):
                 if self.expandable_rows:
                     if visual_column != 0:
                         table_column = visual_column-1
-                        column_values = [row[table_column] for row in source_model.table_data]
+
+                        # in try in case number of headers don't match total columns in the data
+                        try:
+                            column_values = [row[table_column] for row in source_model.table_data]
+                        except:
+                            column_values = None
                 else:
+                    # in try in case number of headers don't match total columns in the data
                     try:
                         column_values = [row[visual_column] for row in source_model.table_data]
                     except:
@@ -3364,10 +3371,11 @@ class setup_table(QFrame):
 
         self.sql_subtable_name = subtable_sql_name
         self.sql_subtable_path = subtable_sql_path
-        self.sub_table_headers_labels = subtable_headers
         self.sql_subtable_query = subtable_query
 
-        if self.use_sql:
+        self.loadnew_subtable_headers(subtable_headers)
+
+        if self.use_sql and self.table_view is not None:
             self.returnSQL_subtable_data()
             self.table_view.sub_table_data = self.sub_table_data
 
@@ -3385,7 +3393,7 @@ class setup_table(QFrame):
 
             self.table_view.reset()
 
-    def loadnew_columns_with_checkboxes(self, columns_with_checkboxes: List[int]):
+    def loadnew_columns_with_checkboxes(self, columns_with_checkboxes: Union[List[int], None]):
         """
         Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
         """
@@ -3398,9 +3406,45 @@ class setup_table(QFrame):
             self.table_view.columns_with_checkboxes = self.columns_with_checkboxes
             self.model.checkbox_indexes = self.columns_with_checkboxes
 
+            # add the columns to the self.checked_Indexes_rows dictionary
+            if self.checked_indexes_rows is None:
+                self.checked_indexes_rows = {}
+            else:
+                self.checked_indexes_rows.clear()
+
+            self.update_checked_row_indexes()
+
+            self.loadnew_checkboxed_rows(self.checked_indexes_rows)
+
             self.table_view.reset()
 
-    def loadnew_edible_columns(self, editable_columns: List[int]):
+    # update checked row indexes if the checked_columns changes
+    def update_checked_row_indexes(self):
+        allchecked = {}
+
+        if self.table_view is not None and self.maintable_data is not None:
+            if self.columns_with_checkboxes is not None:
+                for col in self.columns_with_checkboxes:
+                    actual_col = col
+
+                    if self.expandable_rows:
+                        actual_col = col-1
+
+                    checked_row = []
+
+                    try:
+                        for row, values in enumerate(self.maintable_data):
+                            value = self.maintable_data[row][actual_col]
+                            if value.upper() == "TRUE" or value.upper() == "T" or value == 1 or value == "1":
+                                checked_row.append(row)
+                    except:
+                        pass
+
+                    allchecked[col] = checked_row
+
+        self.checked_indexes_rows = allchecked
+
+    def loadnew_edible_columns(self, editable_columns: Union[List[int], None]):
         """
         Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
         """
@@ -3411,7 +3455,7 @@ class setup_table(QFrame):
             delegate = self.table_view.itemDelegate()
             delegate.editable_columns = self.editable_columns
 
-    def loadnew_datetime_columns(self, datetime_columns: List[int]):
+    def loadnew_datetime_columns(self, datetime_columns: Union[List[int], None]):
         """
         Note: if you are using expandable rows, you will need to compensate by adding +1 to your indexes
         """
