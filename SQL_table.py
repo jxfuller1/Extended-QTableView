@@ -103,13 +103,7 @@ def sql_retrieve_rowid_by_index(sql_path, table_name: str, row_index: int) -> tu
     return rowid
 
 
-def create_sql_table_from_excel(excel_file_path, table_name, sql_path):
-    if '"' not in table_name[0]:
-        table_name = '"' + table_name
-
-    if '"' not in table_name[-1]:
-        table_name = table_name + '"'
-
+def create_sql_table_from_excel(excel_file_path: str, table_name: str, sql_path: str):
     conn = sqlite3.connect(sql_path)
     df = pd.read_excel(excel_file_path)
     df.to_sql(table_name, conn, if_exists='replace', index=False)
@@ -141,7 +135,6 @@ def drop_sql_table(sql_path: str, table_name: str):
     cursor.execute(query)
     conn.commit()
     conn.close()
-
 
 # convert passed column to proper datetime format
 def df_datetime_type_conversion(df, column_to_convert_name: List[str], time: bool = False) -> pd.DataFrame:
@@ -328,11 +321,20 @@ def collect_maintabledata_fromSQL_databases(main_df: pd.DataFrame, maintable_dat
 #value = "Something"
 
 
+#sql_maintable_name = "K058"
+#excel_path = r"\\NAS3\Users\Jason Fuller\Desktop\conformity59.xls"
+
+#create_sql_table_from_excel(excel_path, sql_maintable_name, sql_maintable_path)
+
+#drop_sql_table(sql_maintable_path, "K058")
+
+
 #drop_sql_table(r"\\NAS3\Users\Jason Fuller\Desktop\tables\subtables.db", "K057_subtable")
 #test = sql_query_table(r"\\NAS3\Users\Jason Fuller\Desktop\tables\subtables.db", "K057_subtable")
 
 #update_sql_table_cell(sql_maintable_path, sql_maintable_name, row_index, value, column_index=column_index)
 
 
-#df = sql_maintable_to_dataframe(sql_maintable_path, sql_maintable_name)
+#df = sql_maintable_to_dataframe(sql_maintable_path, "K058")
 #print(df)
+
