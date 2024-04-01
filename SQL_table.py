@@ -314,23 +314,23 @@ def collect_maintabledata_fromSQL_databases(main_df: pd.DataFrame, maintable_dat
 # COMMENTED OUT CODE PURELY FOR TESTING PURPOSES
 # COMMENTED OUT CODE PURELY FOR TESTING PURPOSES
 
-#sql_maintable_name = "K057"
-#sql_maintable_path = r"\\NAS3\Users\Jason Fuller\Desktop\tables\maintables.db"
+#sql_maintable_name = ""your_table_name"
+#sql_maintable_path = r"your_maintable_sql_path"
 #row_index = 1
 #column_index = 0
 #value = "Something"
 
 
-#sql_maintable_name = "K058"
-#excel_path = r"\\NAS3\Users\Jason Fuller\Desktop\conformity59.xls"
+#sql_maintable_name = "your_table_name"
+#excel_path = r"your_excel_file"
 
 #create_sql_table_from_excel(excel_path, sql_maintable_name, sql_maintable_path)
 
-#drop_sql_table(sql_maintable_path, "K058")
+#drop_sql_table(sql_maintable_path, "your_table_name")
 
 
-#drop_sql_table(r"\\NAS3\Users\Jason Fuller\Desktop\tables\subtables.db", "K057_subtable")
-#test = sql_query_table(r"\\NAS3\Users\Jason Fuller\Desktop\tables\subtables.db", "K057_subtable")
+#drop_sql_table(r"your_sql_path", "your_subtable_name")
+#test = sql_query_table(r"your_sql_path", "your_subtable-Name")
 
 #update_sql_table_cell(sql_maintable_path, sql_maintable_name, row_index, value, column_index=column_index)
 
