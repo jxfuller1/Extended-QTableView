@@ -1,38 +1,26 @@
-<b>CODING IS NOW COMPLETE.  Documentation for how to properly use this to come shortly!
+<b>CODING IS NOW COMPLETE.  <u>Documentation for how to properly use this to come shortly!</u>
 You can pass in the parameters when initialization the table and/or use custom functions I made to change the parameters of the table afterwards</b>
 
 This is based on a table UI element from an expensive piece of software from my work that is extremely
 handy for a manufacturing environment for tracking work/showing data.  I thought I'd recreate it.
 
-This QTableView uses a custom QHeaderView, QAbstractTableModel, QStyledItemDelegate QSortFilterProxyModel and more.  It has features that 
-simulate checkboxes, sub-table widgets, searching, filtering, sorting.
+My implementation of this will remain performant even with tens of thousands of rows of data.
 
-Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
 <b>Features that this currently has as of 4/1/2024:</b>
 
-1) Sorting
-2) Column Sections are movable
-3) Filtering w/ Comboboxes at the headers
-4) Expansion of rows that display sub-tablewidgets to give additional information for each row
-5) Checkboxes in columns for main table and sub-table widgets
-6) Setting which columns you want to be editable or non-editable
-7) Filter combobox options update dynamically as cell data is changed
-8) In-column searching   (as you type in a cell it will search the column and highlight the matching string typed)
-9) Optionable Footer Row
-10) Current Filters applied will show up below footer
-11) Date column datatype added that allows you to change the date with a Calendar popup in main table and sub-tables
-12) Optional add/remove rows in main table and sub-tables by right clicking vertical headers
-13) Option to make table editing only happen on double clicks   (double clicking opens up qdialog to change data for row)
-14) support for using SQL database.
-    <ul>a) Grabbing data from SQL tables to populate Qtableview</ul>
-    <ul>b) Changes to table will be reflected to the SQL database.  (which includes the sub-tables)</ul>
-    <ul>c) supports only using Sqlite3.</ul>
-    <ul>d) The way this is written, won't cause issues with multiple people making changes at the same time.</ul>
-15) Export visible rows to Excel
-16) Functions added for safely clearing table and safely being able to dynamically changing table settings, including
-    switching back and forth between using SQL or not.
-
+1) Accepts SQL - uses SQLITE3 to read/write to tables
+2) Expansion rows with additional tables
+3) Columns that support checkboxes
+4) Header Filtering  - w/ filter footer
+5) In-column searching  (just type in the column to find what you want)
+6) Export to Excel
+7) Optional Footer Row
+8) Optional add/remove rows
+9) Optional Datetime columns w/ QCalendar
+10) Optional double click to edit table(s)
+11) Sorting/movable columns
+    
 
 <b>Items left to finish:  ALMOST ALL FINISHED, YAY!!!</b>
    
