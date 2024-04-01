@@ -2,15 +2,14 @@ import sys
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QComboBox, QHBoxLayout, QApplication, QMainWindow, QPushButton
 
 # change testing_file3 to the file with the Qtableview
-import testing_file3
+import ExtendedQtableview
 
 import SQL_table
 import time
 
 class LazyDataViewer(QMainWindow):
-    def __init__(self, app):
+    def __init__(self):
         super().__init__()
-        self.app = app
 
         self.setGeometry(200, 200, 600, 400)
         self.sql_maintable_path = r"\\NAS3\Users\Jason Fuller\Desktop\tables\maintables.db"
@@ -85,7 +84,7 @@ class LazyDataViewer(QMainWindow):
         self.secondary_horizontal.addStretch()
 
        # table = self.table_SQLsetup_variables()
-        self.table = testing_file3.setup_table(app=self.app)
+        self.table = ExtendedQtableview.setup_table()
 
         self.main_layout.addLayout(self.main_horizontal)
         self.main_layout.addLayout(self.secondary_horizontal)
@@ -127,7 +126,7 @@ class LazyDataViewer(QMainWindow):
         self.table.loadnew_columns_with_checkboxes(col_with_checks)
 
     def change_editable_col(self):
-        editable = [3]
+        editable = [0]
         self.table.loadnew_edible_columns(editable)
 
     def sub_data(self):
@@ -187,7 +186,7 @@ class LazyDataViewer(QMainWindow):
         subtable_datetime_columns = [2]
         editable_columns = [0]
 
-        self.table = testing_file3.setup_table(app=self.app, use_sql=use_sql, sql_maintable_name=sql_maintable_name, sql_maintable_path=sql_maintable_path,
+        self.table = ExtendedQtableview.setup_table(use_sql=use_sql, sql_maintable_name=sql_maintable_name, sql_maintable_path=sql_maintable_path,
                                           sql_subtable_path=sql_subtable_path, sql_subtable_name=sql_subtable_name,
                                           sub_table_headers_labels=sub_table_headers_labels, expandable_rows=expandable_rows,
                                           datetime_columns=datetime_columns, columns_with_checkboxes=columns_with_checkboxes,
@@ -201,6 +200,6 @@ class LazyDataViewer(QMainWindow):
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    viewer = LazyDataViewer(app)
+    viewer = LazyDataViewer()
     viewer.show()
     sys.exit(app.exec_())
