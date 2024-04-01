@@ -1,5 +1,7 @@
 <b>CODING IS NOW COMPLETE.  <u>Documentation for how to properly use this to come shortly!</u>
-You can pass in the parameters when initialization the table and/or use custom functions I made to change the parameters of the table afterwards</b>
+You can pass in the parameters when initialization the table and/or use custom functions I made to change the parameters of the table afterwards
+
+note: This uses PyQt5 and not PyQt6. This could easily be extended to PyQt6... im just personally using 5 still due to some libraries I have that require 5 still.</b>  
 
 This is based on a table UI element from an expensive piece of software from my work that is extremely
 handy for a manufacturing environment for tracking work/showing data.  I thought I'd recreate it.
