@@ -1,4 +1,5 @@
-This is a work in progress project.  
+<b>THIS PROJECT NOW COMPLETE.  Documentation for how to properly use this to come shortly!
+You can pass in the parameters when initialization the table and/or use custom functions I made to change the parameters of the table afterwards<\/b>
 
 This is based on a table UI element from an expensive piece of software from my work that is extremely
 handy for a manufacturing environment for tracking work/showing data.  I thought I'd recreate it.
@@ -8,7 +9,7 @@ simulate checkboxes, sub-table widgets, searching, filtering, sorting.
 
 Because of this implementation with custom views/models/delegates it will remain performant even with a TON of rows/columns.
 
-<b>Features that this currently has as of 3/27/2024:</b>
+<b>Features that this currently has as of 4/1/2024:</b>
 
 1) Sorting
 2) Column Sections are movable
@@ -35,13 +36,7 @@ Because of this implementation with custom views/models/delegates it will remain
 
 <b>Items left to finish:  ALMOST ALL FINISHED, YAY!!!</b>
    
-1) remove code for changing selection state of the checkboxes when mouse hovers over them....or find a different way, it doesn't work very well
-   with current implementation... it's just a little visual indicator anyway.
-   
-2) Remove code for custom combobox filter dropdown locations, this uses the qapplication from pyqt5 to remove the default animations for the comboboxes,
-   however this means the user has to pass down the qapplication to the qtableview.... which i don't want.
-   
-3) Make documentation for the use of this
+1) Make documentation for the use of this
 
    
 Header drop down filters and sub-tables for each row:
