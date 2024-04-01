@@ -1,5 +1,5 @@
 <b>THIS PROJECT NOW COMPLETE.  Documentation for how to properly use this to come shortly!
-You can pass in the parameters when initialization the table and/or use custom functions I made to change the parameters of the table afterwards<\/b>
+You can pass in the parameters when initialization the table and/or use custom functions I made to change the parameters of the table afterwards</b>
 
 This is based on a table UI element from an expensive piece of software from my work that is extremely
 handy for a manufacturing environment for tracking work/showing data.  I thought I'd recreate it.
