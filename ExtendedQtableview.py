@@ -902,13 +902,17 @@ class CustomTableView(QTableView):
                 pass
 
     def setFooterValue(self, column: int):
-        footer_edit = self.footer_row_boxes[column]
+        try:
+            footer_edit = self.footer_row_boxes[column]
+        except:
+            footer_edit = None
 
         if self.columns_with_checkboxes and column in self.footer_values.keys() and column not in self.columns_with_checkboxes \
                 or not self.columns_with_checkboxes and column in self.footer_values.keys():
             value = self.footer_values[column]
             if "total" in value.lower():
-                footer_edit.setText(str(self.proxy_model.rowCount()))
+                if footer_edit is not None:
+                    footer_edit.setText(str(self.proxy_model.rowCount()))
 
             if "sum" in value.lower():
                 # Get column data for visible rows
@@ -921,7 +925,8 @@ class CustomTableView(QTableView):
                 all_floats = sum(value for s in column_data if (value := self.try_float(s)) is not None)
                 total = integer_total + all_floats
 
-                footer_edit.setText(str(total))
+                if footer_edit is not None:
+                    footer_edit.setText(str(total))
 
         # total checked boxes, taking into account any removed via filters
         elif self.columns_with_checkboxes and column in self.columns_with_checkboxes:
@@ -938,9 +943,11 @@ class CustomTableView(QTableView):
 
                 total = set(checked_rows) - non_visible_checked_rows
 
-                footer_edit.setText(str(len(total)))
+                if footer_edit is not None:
+                    footer_edit.setText(str(len(total)))
             else:
-                footer_edit.setText("0")
+                if footer_edit is not None:
+                    footer_edit.setText("0")
 
     def footer_row_items(self):
         for i in range(self.proxy_model.columnCount()):
@@ -986,9 +993,10 @@ class CustomTableView(QTableView):
         combined_column_width = sum(self.columnWidth(col) for col in range(self.proxy_model.columnCount()))
         footer_width = min(combined_column_width, view_size.width())
 
-        self.footer_widget.setFixedWidth(footer_width+vertical_header_width)
-        self.footer_widget.setFixedHeight(self.footer_height)
-        self.footer_widget.move(view_position.x()-vertical_header_width, view_position.y()+view_size.height())
+        if self.footer_widget is not None:
+            self.footer_widget.setFixedWidth(footer_width+vertical_header_width)
+            self.footer_widget.setFixedHeight(self.footer_height)
+            self.footer_widget.move(view_position.x()-vertical_header_width, view_position.y()+view_size.height())
 
     def display_filter_setup(self):
         padding = 4
@@ -1482,10 +1490,12 @@ class CustomTableView(QTableView):
         # update footer position as well if footer
         if self.footer_show:
             self.footer_position()
-            self.footer_widget.raise_()
+            if self.footer_widget is not None:
+                self.footer_widget.raise_()
 
         self.display_filter_position()
-        self.filter_widget.raise_()
+        if self.footer_widget is not None:
+            self.filter_widget.raise_()
 
     def sub_table_create(self) -> Tuple[QWidget, QTableWidget]:
         upper_widget = mywidget(self)
@@ -1859,6 +1869,13 @@ class CustomTableView(QTableView):
 
         self.reset()
 
+    def keyPressEvent(self, event):
+        # overriding key press events in the qtableview due to using a custom in column search method
+        # if i don't override this the custom in-column searching will be funky
+        if event.key() in {Qt.Key_Up, Qt.Key_Down, Qt.Key_Left, Qt.Key_Right}:
+            super().keyPressEvent(event)
+        else:
+            event.ignore()
 
 # for sub_table widget
 class mywidget(QWidget):
@@ -3335,8 +3352,53 @@ class setup_table(QFrame):
 
             if footer:
                 self.table_view.footer_height = 25
+
+                # reset table margin height
+                if self.table_view.filter_dict:
+                    count = 0
+                    for key, values in self.table_view.filter_dict.items():
+                        if len(values) > 0:
+                            count +=1
+
+                    if count != 0:
+                        self.table_view.viewport_bottom_margin = 50
+                    else:
+                        self.table_view.viewport_bottom_margin = 25
+
+                else:
+                    self.table_view.viewport_bottom_margin = 25
+
             else:
                 self.table_view.footer_height = 0
+
+                # reset table margin height
+                if self.table_view.filter_dict:
+                    count = 0
+                    for key, values in self.table_view.filter_dict.items():
+                        if len(values) > 0:
+                            count += 1
+
+                    if count != 0:
+                        self.table_view.viewport_bottom_margin = 25
+                    else:
+                        self.table_view.viewport_bottom_margin = 0
+
+                else:
+                    self.table_view.viewport_bottom_margin = 0
+
+                # delete footer widgets if there is one
+                if self.table_view.footer_row_boxes:
+                    for lineedit in self.table_view.footer_row_boxes:
+                        lineedit.deleteLater()
+
+                    self.table_view.footer_row_boxes.clear()
+
+                if self.table_view.footer_widget is not None:
+                    self.table_view.footer_widget.deleteLater()
+
+            self.table_view.setViewportMargins(self.table_view.verticalHeader().size().width(),
+                                               self.table_view.horizontalHeader().size().height(), 0,
+                                               self.table_view.viewport_bottom_margin)
 
     def loadnew_headers(self, headers: List[str]):
         self.model.update_headers(headers)
