@@ -1,3 +1,5 @@
+Note: This uses the Python libraries PyQt5, sqlite3 and pandas.  You will need these installed to use this
+
 Overview
 ======================================================
 
