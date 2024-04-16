@@ -1,5 +1,3 @@
-<b> UPDATE 4/15/2024, Almost done:  95% of the documentation is complete for using this </b>
-
 <b>note: This uses PyQt5 and not PyQt6. This could easily be extended to PyQt6... im just personally using 5 still due to some libraries I have that require 5 still.</b>  
 
 This is based on a table UI element from an expensive piece of software from my work that is extremely
@@ -332,17 +330,39 @@ For example:
 
 Other Notes:
 ===================================================================
-<ul><li>If you want to make other actions happen when clicking on specific columns, such as opening a PDF.  Override/rewrite the <b>doubleclick_tableChange()</b> function to make an action happen when double clicking a certain column.</li>
+<ul><li>If you want to make other actions happen when clicking on specific columns, such as opening a PDF.  Override/rewrite the <b>doubleclick_tableChange()</b> function to make an action happen when double clicking a certain column.</li><br />
 
 <li>If using SQL w/ expandable rows and you provide a sub-table name and SQL directory path.   <b>The table MUST contain a "maintable_index" column</b>.  Where the maintable_index represents the row index of the maintable.  For example,  if your sub-table on the first row of the main table should have 10 rows in it, then you will have 10 rows on the SQL table with the number 1 in the maintable_index column.  
-  <br /> It's very possible you could get this data in some other way, but the first value in each row data value of the sub-table list needs to contain a reference to which main table row it belongs to:
+  <br /> <br />It's very possible you could get this data in some other way, but the first value in each row data value of the sub-table list needs to contain a reference to which main table row it belongs to, such as:
+<pre>[
+[[1, 1sub1, 1sub2, 1sub3], [1, 1sub4, 1sub5, 1sub6]]
+[[2, 2sub1, 2sub2, 1sub3], [2, 2sub4, 2sub5, 2sub6]]
+]</pre>
 </li>
+<br />
 
 <li>If using SQL w/ expandable rows and you provide a sub-table name and SQL directory path.   If the table name does not exist in the SQL database, a blank table will automatically be created that has a "maintable_index" column. 
-</li>
+</li><br />
+
+<li>If using SQL.  Note that SQlite3 will automatically create .db file at your chosen pathway if the .db file doesn't exist.  You can also use the <b>create_sql_table_from_excel()</b> and <b>create_blank_sql_table()</b> functions within the SQL_table.py to create the .db SQL database files and/or tables.
+</li><br />
+
+<li>If you are using checkboxes in columns and say if a checkbox is checked and you want it to perform a certain action, such as moving that row to another table, you can add/rewrite the <b>checkboxstateChange()</b> function to do that.  It captures which checkbox changed and then use the <b>addMainRow()</b> or <b>delMainRow()</b> functions or whatever you are looking to do. <br /><br />  (Note: if adding row programmatically from a different table, add to the addMainRow() function to accept that data to add to the new row).
+</li><br />
 
 <li>
-</li>
+If you want to add a different type of editor for the columns (such as a button that opens a combobox that then edits table).  You will need to add to these functions: <br />
+<pre><b>createEditor()</b>  (for creating the button)
+<b>setEditorData()</b>  (for setting the data to be in the editor)
+<b>updateEditorGeometry()</b>  (for setting size of editor within the cell) </pre>
+And you may or may not want to send a signal to the handleDateeditKeyPress() function if you make a change in the editor and want to forcibly close it and commit the data say on the index change of a QCombobox
+  
+</li><br />
+
+<li>
+If want to change the look of the dialog popups for changing the main table or sub table data, you can rewrite them in the <b>initUI()</b> functions in the <b>addRowMaintable_window()</b> and <b>sub_table_window()</b> classes.  <br /><br />
+Depending on how you adjust these,  you may have to change the <b>sub_table_items_changed()</b> or the <b>addMainRowUpdate()</b> functions.  Keep in mind that the addRowMaintable_window() popup is used for both the feature for "double click to edit only" and for creation of new rows. If you want it to be different, I recommend coding a new QDialog class and have 1 of the features call it instead.
+</li><br />
 </ul>
 
 
