@@ -12,7 +12,7 @@ class LazyDataViewer(QMainWindow):
         super().__init__()
 
         self.setGeometry(200, 200, 600, 400)
-        self.sql_maintable_path = r"\\NAS3\Users\Jason Fuller\Desktop\tables\maintables.db"
+        self.sql_maintable_path = r"your_path\.....\database_filename.db"
 
         self.main_widget = QWidget()
         self.main_layout = QVBoxLayout()
@@ -71,6 +71,8 @@ class LazyDataViewer(QMainWindow):
         self.change_sub_add_row.clicked.connect(self.change_submain_row)
         self.change_sub_del_row = QPushButton("change del subrow")
         self.change_sub_del_row.clicked.connect(self.change_subdel_row)
+        self.add_footer_now = QPushButton("add footer")
+        self.add_footer_now.clicked.connect(self.add_footer)
 
         self.secondary_horizontal.addStretch()
         self.secondary_horizontal.addWidget(self.change_editable)
@@ -81,6 +83,7 @@ class LazyDataViewer(QMainWindow):
         self.secondary_horizontal.addWidget(self.change_main_del_row)
         self.secondary_horizontal.addWidget(self.change_sub_add_row)
         self.secondary_horizontal.addWidget(self.change_sub_del_row)
+        self.secondary_horizontal.addWidget(self.add_footer_now)
         self.secondary_horizontal.addStretch()
 
        # table = self.table_SQLsetup_variables()
@@ -93,6 +96,12 @@ class LazyDataViewer(QMainWindow):
         self.main_widget.setLayout(self.main_layout)
 
         self.setCentralWidget(self.main_widget)  # Set the QTableView as the central widget
+
+    def add_footer(self):
+        footer = {1: "total", 6: "total"}
+
+        self.table.useFooter(True)
+        self.table.loadnew_footervalues(footer)
 
     def change_using_sql(self):
         self.table.update_using_sql(True)
@@ -158,15 +167,15 @@ class LazyDataViewer(QMainWindow):
         table_name = self.sql_combo.currentText()
         sub_table_name = table_name + "_subtable"
         self.table.clear_table(keep_filter=True)
-        self.table.loadnew_maintable_sql(maintable_name=table_name, maintable_sql_path=r"\\NAS3\Users\Jason Fuller\Desktop\tables\maintables.db",
-                                         subtable_sql_name=sub_table_name, subtable_sql_path=r"\\NAS3\Users\Jason Fuller\Desktop\tables\subtables.db",
+        self.table.loadnew_maintable_sql(maintable_name=table_name, maintable_sql_path=self.sql_maintable_path,
+                                         subtable_sql_name=sub_table_name, subtable_sql_path=r"your_path\....\database_filename.db",
                                          subtable_headers=["NCR No.", "Disposition", "Date", "Extra", "Completed"], keep_existing_filter=True)
 
     def table_SQLsetup_variables(self) -> QWidget:
         use_sql = True
         sql_maintable_name = "K057"
-        sql_maintable_path = r"\\NAS3\Users\Jason Fuller\Desktop\tables\maintables.db"
-        sql_subtable_path = r"\\NAS3\Users\Jason Fuller\Desktop\tables\subtables.db"
+        sql_maintable_path = self.sql_maintable_path
+        sql_subtable_path = r"your_path\....\database_filename.db"
         sql_subtable_name = "K057_subtable"
         sub_table_headers_labels = ["NCR No.", "Disposition", "Date", "Extra", "Completed"]
         expandable_rows = False
