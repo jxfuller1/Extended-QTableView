@@ -25,6 +25,7 @@ My implementation of this will remain performant even with tens of thousands of 
 
 setup_table arguments (NOTE: these arguments do NOT need to be passed in at time of table initialization.  The parameters/argument can be changed with separate functions later.
 
+Create Table
 ==================================================================================
 
 <b>ExtentedQtableview.setup_table</b><i>(maintable_data, maintable_headers, columns_with_checkboxes, checked_indexes_rows, sub_table_data, editable_columns, datetime_columns, footer, footer_values, subtable_col_checkboxes, sub_table_headers_labels, expandable_rows, add_mainrow_option, del_mainrow_option, add_subrow_option, del_subrow_option, subtable_datetime_columns, dbleclick_edit_only, use_sql, sql_maintable_path, sql_maintable_name, sql_maintable_query, sql_subtable_path, sql_subtable_name, sql_subtable_query)</i>
