@@ -334,15 +334,17 @@ Other Notes:
 <ul><li>If you want to make other actions happen when clicking on specific columns, such as opening a PDF.  Override/rewrite the <b>doubleclick_tableChange()</b> function to make an action happen when double clicking a certain column.</li><br />
 
 <li>If using SQL w/ expandable rows and you provide a sub-table name and SQL directory path.   <b>The table MUST contain a "maintable_index" column</b>.  Where the maintable_index represents the row index of the maintable.  For example,  if your sub-table on the first row of the main table should have 10 rows in it, then you will have 10 rows on the SQL table with the number 1 in the maintable_index column.  
-  <br /> <br />It's very possible you could get this data in some other way, but the first value in each row data value of the sub-table list needs to contain a reference to which main table row it belongs to, such as:
-<pre>[
-[[1, 1sub1, 1sub2, 1sub3], [1, 1sub4, 1sub5, 1sub6]]
-[[2, 2sub1, 2sub2, 1sub3], [2, 2sub4, 2sub5, 2sub6]]
-]</pre>
+  <br /> <br />It's very possible you could get this data in some other way, but I would recommend setting up the tables on the SQL file for the sub tables in this way, for example:
+<pre><b>maintable_index    column1    column2</b>
+      1             data1      data2
+      1             data3     something1
+      2             test1      test2
+      2             data52     data0
+</pre>
 </li>
 <br />
 
-<li>If using SQL w/ expandable rows and you provide a sub-table name and SQL directory path.   If the table name does not exist in the SQL database, a blank table will automatically be created that has a "maintable_index" column. 
+<li>If using SQL w/ expandable rows and you provide a sub-table name and SQL directory path.   If the table name does not exist in the SQL database, a blank table will automatically be created that has a "maintable_index" column in the above method. 
 </li><br />
 
 <li>If using SQL.  Note that SQlite3 will automatically create .db file at your chosen pathway if the .db file doesn't exist.  You can also use the <b>create_sql_table_from_excel()</b> and <b>create_blank_sql_table()</b> functions within the SQL_table.py to create the .db SQL database files and/or tables.
