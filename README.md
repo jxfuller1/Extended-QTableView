@@ -11,7 +11,7 @@ My implementation of this will remain performant even with tens of thousands of 
 
 <b>Features:</b>
 
-1) Accepts SQL - uses SQLITE3 to read/write to tables
+1) Accepts SQL - uses SQLITE3 to read/write to tables. Can be used to create .db SQL files and/or add/modify tables to it as well.
 2) Expansion rows with additional tables
 3) Columns that support checkboxes
 4) Header Filtering  - w/ filter footer
