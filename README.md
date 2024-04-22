@@ -1,4 +1,5 @@
-Note: This uses the Python libraries PyQt5, sqlite3 and pandas.  You will need these installed to use this
+Can be installed with:
+<pre>pip install ExtendedQtableview</pre>
 
 Overview
 ======================================================
